@@ -1,0 +1,38 @@
+/* Classic browser chrome, with the existing touch-friendly layout. */
+:root{background:#d6c6ec;color:#25163c;--line:#847094}
+body{background-color:#d6c6ec;background-image:repeating-conic-gradient(#ffffff26 0% 25%,transparent 0% 50%);background-size:8px 8px}
+.site-header{border-bottom:3px double #6d4c86;background:#e7d9f5}
+.brand{color:#4a147b;text-shadow:1px 1px #fff;text-decoration:underline;text-underline-offset:4px}
+.intro h1{color:#4a147b;text-shadow:2px 2px #fff}
+.studio{background:#d5d0d9;border:3px solid;border-color:#fff #675c72 #675c72 #fff;border-radius:0;box-shadow:2px 2px 0 #362740;overflow:visible}
+.studio-top{background:#663399;color:#fff;border-bottom:2px solid #362740;height:43px}
+.studio-title{color:#fff;font-weight:700}
+.save-status{color:#f2e4ff}
+.canvas-frame{border:3px solid;border-color:#6c6079 #fff #fff #6c6079;border-radius:0;box-shadow:0 0 0 1px #a296ad}
+.section-label h2,.history-label{color:#32124f;text-shadow:1px 1px #fff}
+.tool-button,.tool-switch .tool-button,.sizes button,.brush-styles button,.history-actions button,.download-button,.color-picker summary{
+  background:#ded9e4;color:#271438;border:3px solid;border-color:#fff #74657f #74657f #fff;border-radius:0;box-shadow:1px 1px 0 #403249;transition:none
+}
+.tool-button.selected,.sizes button.selected,.brush-styles button.selected{
+  background:#d6b7f0;color:#32124f;border-color:#715884 #fff #fff #715884;box-shadow:none
+}
+.tool-button:not(:disabled):active,.sizes button:not(:disabled):active,.brush-styles button:not(:disabled):active,.history-actions button:not(:disabled):active,.download-button:not(:disabled):active{
+  transform:none;border-color:#715884 #fff #fff #715884;box-shadow:none
+}
+.tool-button:not(.selected):hover,.sizes button:not(.selected):hover,.brush-styles button:not(.selected):hover,.history-actions button:not(:disabled):hover{background:#e9def4}
+.history-actions{border-top:0}
+.history-actions button:disabled{opacity:1;color:#968b9e;text-shadow:1px 1px #fff;background:#d5d0d9}
+.history-actions button:last-child{color:#782747}
+.history-actions button:last-child:disabled{color:#968b9e}
+.download-button{background:#c8e5b5;color:#244019;font-weight:700;box-shadow:1px 1px 0 #403249}
+.download-button:hover{background:#d7efc7}
+.color-picker summary{background:#f8f4fc;border-color:#74657f #fff #fff #74657f}
+.selected-color-chip{border:2px solid;border-color:#74657f #fff #fff #74657f}
+.picker-arrow{background:#ded9e4;border:2px solid;border-color:#fff #74657f #74657f #fff;padding:0 5px;line-height:22px;color:#271438}
+.color-picker[open] .picker-arrow{transform:none;border-color:#74657f #fff #fff #74657f}
+.color-picker .palette{background:#d5d0d9;border:3px solid;border-color:#fff #74657f #74657f #fff;box-shadow:2px 2px 0 #403249;border-radius:0;z-index:5}
+.color-picker .swatch{border:2px solid;border-color:#ffffffa6 #00000066 #00000066 #ffffffa6;border-radius:0}
+.color-picker .swatch.selected{outline:2px dotted #32124f;outline-offset:2px}
+.toast{background:#ffffcc;border:3px solid;border-color:#fff #74657f #74657f #fff;border-radius:0;box-shadow:2px 2px 0 #403249;color:#271438}
+button:focus-visible,summary:focus-visible,a:focus-visible{outline:2px dotted #32124f;outline-offset:3px}
+@media(max-width:760px){.history-actions{border:0}.studio-top{padding:0 10px}.save-status{font-size:9px}}

@@ -1,0 +1,12 @@
+.neon
+.env.local
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+.DS_Store
+Thumbs.db
+dist/
+.vercel/

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f5f2fc">
+  <title>sketchlet — drawing studio</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/playful.css">
+  <link rel="stylesheet" href="/retro.css">
+  <link rel="stylesheet" href="/flow.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="sketchlet home">sketchlet</a>
+  </header>
+  <main>
+    <section class="intro">
+      <h1>Let's draw!</h1>
+    </section>
+    <section class="studio" aria-label="Drawing studio">
+      <div class="studio-top"><div><span class="window-dots"><i></i><i></i><i></i></span><span class="studio-title">The drawing room</span></div><span class="save-status" id="save-status" role="status">Ready when you are</span></div>
+      <div class="studio-body">
+        <div class="canvas-column">
+          <div class="canvas-frame" id="canvas-frame">
+            <canvas id="canvas" width="1200" height="1200" tabindex="0" aria-label="Drawing canvas. Draw using a finger, stylus, or mouse. Use the tools to choose colors, brush size, or erase."></canvas>
+            <div id="canvas-hint" class="canvas-hint" aria-hidden="true"></div>
+          </div>
+        </div>
+        <aside class="toolbox" aria-label="Drawing tools">
+          <div class="tool-section"><div class="section-label">01 <h2>Make your mark</h2></div><div class="tool-switch" role="group" aria-label="Drawing tool"><button id="brush" class="tool-button selected" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="m14 5 5 5M4 20l1-6L16 3a2 2 0 0 1 3 0l2 2a2 2 0 0 1 0 3L10 19zM5 14l5 5"/></svg>Draw</button><button id="eraser" class="tool-button" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="m14 3 7 7-10 10H6l-4-4zM8 10l7 7M11 20h10"/></svg>Erase</button></div></div>
+          <div class="tool-section"><div class="section-label">02 <h2>A splash of color</h2></div><div id="palette" class="palette" role="group" aria-label="Ink color"></div><div class="color-caption"><span id="color-name">Midnight</span><span id="color-hex">#343044</span></div></div>
+          <div class="tool-section"><div class="section-label">03 <h2>Pick your brush</h2></div><div class="sizes" role="group" aria-label="Brush size"><button data-size="5" aria-label="Fine brush" aria-pressed="false"><i style="--dot:5px"></i><span>Fine</span></button><button data-size="14" class="selected" aria-label="Medium brush" aria-pressed="true"><i style="--dot:12px"></i><span>Medium</span></button><button data-size="32" aria-label="Bold brush" aria-pressed="false"><i style="--dot:22px"></i><span>Bold</span></button></div></div>
+          <div class="tool-section background-section"><div class="section-label">04 <h2>Set the scene</h2></div><div id="background-palette" class="palette small" role="group" aria-label="Canvas background color"></div><p class="tool-note">A new background. Same lovely lines.</p></div>
+          <div class="history-actions"><button id="undo" disabled title="Undo (Ctrl or Command Z)"><svg viewBox="0 0 24 24"><path d="M9 5 4 10l5 5M4 10h10a6 6 0 0 1 0 12"/></svg>Undo</button><button id="redo" disabled title="Redo (Ctrl or Command Shift Z)"><svg viewBox="0 0 24 24"><path d="m15 5 5 5-5 5M20 10H10a6 6 0 0 0 0 12"/></svg>Redo</button><button id="clear" title="Clear canvas" aria-label="Clear canvas"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"/></svg></button></div>
+          <button id="download" class="download-button"><svg viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></svg>Save image<span aria-hidden="true">↗</span></button>
+          <p class="download-note">Yours to keep. Download as PNG.</p>
+        </aside>
+      </div>
+    </section>
+  </main>
+  <div id="toast" role="status" class="toast"></div>
+  <script type="module" src="/src/studio.js"></script>
+  <script type="module" src="/src/gallery.js"></script>
+</body>
+</html>

@@ -1,0 +1,95 @@
+# Deploy Sketchlet on Vercel
+
+Vercel serves `dist/` as static files and runs `api/index.js` as a Node.js function. Neon remains the database and object storage provider. No new storage service or authentication provider is needed.
+
+## 1. Check locally
+
+You control terminal commands and server processes. These commands do not deploy the website:
+
+```powershell
+npm run check
+npm run build
+npm run db:migrate
+```
+
+The migration adds `sketchlet_rate_limits` to support shared limits across Vercel instances. Existing data is preserved. The build copies an explicit list of public files into `dist`; it does not load credentials, run migrations, or alter Neon. GitHub Actions repeats the checks and build on pushes and pull requests without database credentials.
+
+Stop your current local server with Ctrl+C, then restart with `npm run dev`. The local entry point is now `local-server.mjs`; your npm command stays the same. Check saving and rating after the migration. These newly added checks have not been executed by the agent.
+
+## 2. Put the project in GitHub
+
+There was no Git repository in this workspace when deployment files were prepared. If that is still true:
+
+```powershell
+git init -b main
+git add .
+git status --short
+git diff --cached --stat
+```
+
+Before committing, confirm `.env.local`, `.neon`, `node_modules`, `dist`, and `.vercel` are absent from the staged list. `.env.example` is intentionally included and contains no credentials.
+
+```powershell
+git commit -m "Initial Sketchlet drawing app with Neon and Vercel support"
+```
+
+Create an empty GitHub repository, then run GitHub's displayed commands to add its remote and push `main`. Do not replace an existing remote if the repository has already been configured. No repository, commit, push, or deployment has been created by the agent.
+
+## 3. Import the GitHub repository into Vercel
+
+Choose **Add New → Project**, import the repository, and use:
+
+| Setting | Value |
+| --- | --- |
+| Framework preset | Other |
+| Root directory | Repository root |
+| Install command | `npm ci` |
+| Build command | `npm run build` |
+| Output directory | `dist` |
+| Node.js | 24.x (the project supports Node 22.20+) |
+
+`vercel.json` supplies build/output settings, routing, and a 30-second function duration. Select a function region near your Neon project's region in Vercel settings. `HOST` and `PORT` are only for local development and should not be added to Vercel.
+
+## 4. Add environment variables before deploying
+
+Copy these values directly from your local `.env.local` into the project's **Production** environment settings. Do not paste credentials into chat, commit them, prefix them with `PUBLIC_`, or put them in `vercel.json`.
+
+| Variable | Value |
+| --- | --- |
+| `DATABASE_URL` | The Neon pooled connection string |
+| `AWS_ENDPOINT_URL_S3` | The Neon object storage endpoint |
+| `AWS_REGION` | The value supplied by Neon (set explicitly; do not use Vercel's region by accident) |
+| `AWS_ACCESS_KEY_ID` | Neon object storage access key |
+| `AWS_SECRET_ACCESS_KEY` | Neon object storage secret |
+| `DRAWINGS_BUCKET` | `drawings` |
+
+`DATABASE_URL_UNPOOLED` and `NEON_BRANCH` are not needed by the running site. Migrations are run explicitly from your terminal, never automatically by Vercel's build.
+
+For a custom domain, also set `APP_ORIGIN` to its exact HTTPS origin, such as `https://your-domain.example` (no path). For the initial Vercel domain, omit `APP_ORIGIN`: the handler accepts the exact deployment, branch, and production URLs provided by Vercel system environment variables. Keep automatic system environment variables enabled. Never copy the local `APP_ORIGIN=http://localhost:5173` value into Vercel.
+
+Deploy after entering the variables. Updating environment settings later requires a redeployment.
+
+## Preview environments
+
+Start with credentials scoped to Production. Preview builds still load the drawing interface but cannot save until Preview environment credentials are configured. For working previews, create a separate Neon branch, migrate it, and use that branch's database **and storage** credentials in Vercel's Preview environment. Do not mix production database settings with preview storage. Keep Vercel deployment protection enabled for previews.
+
+## 5. Check the deployed URL
+
+- Today's prompt loads, drawing works, and save creates a gallery entry.
+- `/d/<drawing-id>` works when opened directly and refreshed.
+- Saved images load from the private bucket through the API.
+- Rating from another browser works; self-voting and duplicate voting remain blocked.
+- Refresh restores only the draft for the current prompt date.
+- `/.env.local`, `/.neon`, `/backend/api.mjs`, and `/local-server.mjs` return 404.
+- Vercel logs show no missing environment settings, table errors, or storage failures.
+
+Localhost and the hosted domain have different browser storage and guest cookies. Existing drawings in the same Neon database will be visible in the gallery, but the hosted browser will not automatically own drawings created as a localhost guest. Choose the long-term domain early; switching domains changes the guest identity again.
+
+## Initial release limits
+
+- JSON uploads are capped at 4,000,000 bytes to leave room below Vercel's 4.5 MB function limit. Large drawings show a clear error without losing the local draft. A future direct-to-storage upload flow can remove this limit.
+- Postgres enforces 40 writes per guest per minute across function instances. Clearing cookies creates a new guest, so use Vercel Firewall rate limits for broader abuse protection before a large public launch. Rate-limit records can be pruned periodically.
+- Gallery reads are capped at 200 drawings and 90 prompt dates; pagination and moderation/reporting are future work.
+- An interrupted save can leave an unreferenced storage object. A reconciliation job is still needed for long-term housekeeping.
+
+References: [Vercel Node.js functions](https://vercel.com/docs/functions/runtimes/node-js), [build settings](https://vercel.com/docs/builds/configure-a-build), [function limits](https://vercel.com/docs/functions/limitations), [AWS environment variables](https://vercel.com/kb/guide/how-can-i-use-aws-sdk-environment-variables-on-vercel).

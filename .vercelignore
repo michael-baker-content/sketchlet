@@ -1,0 +1,9 @@
+.env
+.env.*
+.neon
+.git
+node_modules
+dist
+tests
+scripts/correct-*.mjs
+local-server.mjs

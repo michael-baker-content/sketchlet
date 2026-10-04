@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { publicFile } from '../backend/public-files.mjs';
 import { easternDate, promptForDate } from '../src/prompts.js';
 test('server denies credentials, source internals, and traversal',()=>{
-  for(const path of ['/.env.local','/.env','/.neon','/.git/config','/server.mjs','/backend/api.mjs','/package-lock.json','/../.env.local','/src/../../.env.local']) assert.equal(publicFile(path),null,path);
+  for(const path of ['/.env.local','/.env','/.neon','/.git/config','/server.mjs','/backend/server.mjs','/backend/api.mjs','/docs/DESIGN.md','/docs/DEPLOYMENT.md','/package-lock.json','/../.env.local','/src/../../.env.local']) assert.equal(publicFile(path),null,path);
   assert.equal(publicFile('/'),'index.html');
   assert.equal(publicFile('/src/gallery.js'),'src/gallery.js');
   assert.equal(publicFile('/d/12345678-1234-1234-1234-123456789abc'),'index.html');

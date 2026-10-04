@@ -1,14 +1,14 @@
-import { COLORS, createDocument, draftKey, restoreDraft, History } from './model.js';
+import { COLORS, BRUSH_SIZES, CANVAS_SIZE, createDocument, draftKey, restoreDraft, History } from './model.js';
 import { BRUSH_SHAPES, BRUSH_STYLES, createBrushRenderer, roughVertices } from './brushes.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#canvas');
 const ctx = canvas.getContext('2d');
 const ink = document.createElement('canvas');
-ink.width = ink.height = 1200;
+ink.width = ink.height = CANVAS_SIZE;
 const inkCtx = ink.getContext('2d');
 const committedInk = document.createElement('canvas');
-committedInk.width = committedInk.height = 1200;
+committedInk.width = committedInk.height = CANVAS_SIZE;
 const committedCtx = committedInk.getContext('2d');
 let renderedStrokes = null;
 let history = new History();
@@ -46,8 +46,8 @@ function updateEraserCursor(event) {
   eraserCursor.dataset.shape = brushShape;
   canvas.style.cursor = tool === 'eraser' ? 'none' : 'crosshair';
   if (!visible) return;
-  eraserCursor.style.width = `${size / 1200 * rect.width}px`;
-  eraserCursor.style.height = `${size / 1200 * rect.height}px`;
+  eraserCursor.style.width = `${size / CANVAS_SIZE * rect.width}px`;
+  eraserCursor.style.height = `${size / CANVAS_SIZE * rect.height}px`;
   eraserCursor.style.left = `${canvas.offsetLeft + cursorPoint.x - rect.left}px`;
   eraserCursor.style.top = `${canvas.offsetTop + cursorPoint.y - rect.top}px`;
 }
@@ -112,17 +112,17 @@ function render() {
     return times && times.at(-1) > now - strokeDelay();
   });
   if (renderedStrokes !== history.document.strokes) {
-    committedCtx.clearRect(0, 0, 1200, 1200);
+    committedCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     for (const stroke of history.document.strokes) if (!trailing.includes(stroke)) drawStroke(committedCtx, stroke);
     renderedStrokes = trailing.length ? null : history.document.strokes;
   }
-  inkCtx.clearRect(0, 0, 1200, 1200);
+  inkCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
   inkCtx.drawImage(committedInk, 0, 0);
   for (const stroke of [...trailing, ...(active ? [active] : [])]) {
     const visible = animateStroke(stroke, now);
     if (visible) drawStroke(inkCtx, visible);
   }
-  ctx.fillStyle = history.document.background; ctx.fillRect(0, 0, 1200, 1200); ctx.drawImage(ink, 0, 0);
+  ctx.fillStyle = history.document.background; ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE); ctx.drawImage(ink, 0, 0);
   $('#canvas-hint').classList.toggle('hidden', history.document.strokes.length > 0 || !!active);
   if ((trailing.length || active) && animationFrame === null) animationFrame = requestAnimationFrame(() => { animationFrame = null; render(); });
 }
@@ -195,9 +195,6 @@ for (const id of ['undo', 'redo']) {
   for (const node of [...button.childNodes]) if (node.nodeType === Node.TEXT_NODE) label.append(node);
   button.append(label);
 }
-const midButton = document.querySelector('[data-size="14"]');
-midButton.querySelector('span').textContent = 'mid';
-midButton.setAttribute('aria-label', 'mid brush');
 const styleSection = document.createElement('div');
 styleSection.className = 'tool-section brush-style-section';
 styleSection.innerHTML = '<label class="brush-select-label">brush style<select id="brush-style"></select></label>';
@@ -213,11 +210,20 @@ function selectShape(value) { brushShape = value; $('#brush-shape').value = valu
 function selectStyle(value) { brushStyle = value; $('#brush-style').value = value; syncFocusTools(); }
 $('#brush-shape').onchange = event => selectShape(event.target.value);
 $('#brush-style').onchange = event => selectStyle(event.target.value);
-for (const b of document.querySelectorAll('[data-size]')) b.onclick = () => { size = Number(b.dataset.size); for (const other of document.querySelectorAll('[data-size]')) { other.classList.toggle('selected', b === other); other.setAttribute('aria-pressed', b === other); } };
+function selectSize(next) {
+  if (!BRUSH_SIZES.includes(next)) return;
+  size = next;
+  for (const other of document.querySelectorAll('[data-size]')) {
+    const selected = Number(other.dataset.size) === size;
+    other.classList.toggle('selected', selected); other.setAttribute('aria-pressed', selected);
+  }
+  syncFocusTools();
+}
+for (const b of document.querySelectorAll('[data-size]')) b.onclick = () => selectSize(Number(b.dataset.size));
 $('#undo').onclick = () => { if (ready && !active && history.undo()) changed(); };
 $('#redo').onclick = () => { if (ready && !active && history.redo()) changed(); };
 $('#clear').onclick = () => { if (!ready || active || !history.document.strokes.length) return; history.commit({ ...history.document, strokes: [] }); changed(); toast('Fresh canvas. Undo brings your drawing back.'); };
-function point(event) { const rect = canvas.getBoundingClientRect(); return [Math.max(0, Math.min(1200, (event.clientX - rect.left) / rect.width * 1200)), Math.max(0, Math.min(1200, (event.clientY - rect.top) / rect.height * 1200))]; }
+function point(event) { const rect = canvas.getBoundingClientRect(); return [Math.max(0, Math.min(CANVAS_SIZE, (event.clientX - rect.left) / rect.width * CANVAS_SIZE)), Math.max(0, Math.min(CANVAS_SIZE, (event.clientY - rect.top) / rect.height * CANVAS_SIZE))]; }
 canvas.addEventListener('pointerdown', event => {
   if (!ready || active || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
   hideDraftStatus();
@@ -340,7 +346,7 @@ $('.studio-body').prepend(normalInfo, normalActions);
 $('.studio-body').append(normalTools);
 const launchHome = document.createComment('full screen button home');
 focusButton.before(launchHome);
-// Keep this aligned with the stacked studio breakpoint in flow.css.
+// Keep this aligned with the stacked studio breakpoint in src/styles/flow.css.
 const stackedLayout = window.matchMedia('(max-width:760px), (min-width:761px) and (max-width:1100px) and (orientation:portrait)');
 function syncFocusInfo() {
   const date = $('.prompt-date')?.textContent.split(' · ')[0] ?? '';
@@ -425,7 +431,7 @@ function syncFocusTools() {
   $('#brush-style').disabled = tool === 'eraser';
 }
 focusSelect('tool').onchange = event => { selectTool(event.target.value); syncFocusTools(); };
-focusSelect('size').onchange = event => { document.querySelector(`[data-size="${event.target.value}"]`).click(); syncFocusTools(); };
+focusSelect('size').onchange = event => { selectSize(Number(event.target.value)); };
 focusSelect('style').onchange = event => selectStyle(event.target.value);
 focusSelect('shape').onchange = event => selectShape(event.target.value);
 focusSelect('color').onchange = event => { document.querySelector(`[data-ink="${event.target.value}"]`).click(); syncFocusTools(); };

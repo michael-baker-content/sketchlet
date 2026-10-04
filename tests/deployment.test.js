@@ -42,7 +42,11 @@ test('published assets exist and their relative imports remain public',async()=>
       assert.ok(publicFile(path),`${file} imports unpublished ${path}`);
     }
   }
-  for(const file of ['.env.local','.neon','local-server.mjs','backend/api.mjs','scripts/correct-singing-kite.mjs','package-lock.json'])assert.equal(PUBLIC_FILES.includes(file),false);
+  const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
+  for(const match of html.matchAll(/<(?:link|script)\b[^>]*\b(?:href|src)=["'](\/[^"']+)["']/g)) {
+    assert.ok(publicFile(match[1]),`index.html references unpublished ${match[1]}`);
+  }
+  for(const file of ['.env.local','.neon','backend/server.mjs','backend/api.mjs','docs/DESIGN.md','docs/DEPLOYMENT.md','scripts/correct-singing-kite.mjs','package-lock.json'])assert.equal(PUBLIC_FILES.includes(file),false);
 });
 test('deployment publishes only dist and routes drawing URLs to the app',async()=>{
   const config=JSON.parse(await readFile(new URL('../vercel.json',import.meta.url),'utf8'));

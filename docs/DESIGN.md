@@ -4,7 +4,7 @@ The site name is Sketchlet, displayed as "sketchlet". Existing browser storage k
 
 ## Global presentation
 
-Use the drawing studio's current retro-web treatment throughout the application. `retro.css` is the current visual reference.
+Use the drawing studio's current retro-web treatment throughout the application. [src/styles/retro.css](../src/styles/retro.css) is the current visual reference.
 
 - Unkempt from Google Fonts, with bold weight for the sketchlet header; lowercase visible copy.
 - Raised beveled buttons, inset fields and canvas, square corners, hard shadows.
@@ -39,7 +39,7 @@ Use the drawing studio's current retro-web treatment throughout the application.
 8. Full-screen drawing on phones and tablets; narrow screens use two tool columns, with swatches in color menus.
 9. Separate gallery submission and PNG download buttons above a contrasting rules footer in normal view.
 
-`src/gallery.js` is the connected entry point. Gallery submission is the primary action and PNG download is an optional local export. Keep previous local drafts and preview records intact. No sample votes or drawings are migrated automatically. Follow README and DEPLOYMENT.md for setup and release verification.
+`src/gallery.js` is the connected entry point. Gallery submission is the primary action and PNG download is an optional local export. Keep previous local drafts and preview records intact. No sample votes or drawings are migrated automatically. Follow [README](../README.md) and [DEPLOYMENT.md](DEPLOYMENT.md) for setup and release verification.
 
 ## Working agreement
 

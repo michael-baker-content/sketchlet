@@ -72,8 +72,10 @@ The main pieces are:
 
 - `src/studio.js`, `src/model.js`, and `src/brushes.js`: canvas, tools, undo, and draft storage.
 - `src/gallery.js`: daily prompts, submissions, profiles, galleries, and rating screens.
-- `backend/` and `db/`: API, validation, storage access, and database migrations.
+- `src/styles/`: base styles, playful details, retro surfaces, and page layouts, loaded in that order.
+- `backend/` and `db/`: local server, API, validation, storage access, and database migrations.
 - `api/`, `scripts/`, and `vercel.json`: hosting, local development, and the public-file build.
+- `docs/`: design notes and deployment instructions.
 
 ## still on the sketchpad
 
@@ -95,4 +97,4 @@ Maintenance uses Node.js 22.20 or newer. Local credentials belong in `.env.local
 
 Stop the existing local server before restarting after backend changes. Run checks and a build before pushing; Vercel builds from source and does not run migrations. Credentials and generated build output stay out of Git.
 
-[Deployment and release checks](DEPLOYMENT.md) · [Design direction](DESIGN.md)
+[Deployment and release checks](docs/DEPLOYMENT.md) · [Design direction](docs/DESIGN.md)

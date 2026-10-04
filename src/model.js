@@ -1,4 +1,6 @@
 import { BRUSH_SHAPES, BRUSH_STYLES } from './brushes.js';
+export const CANVAS_SIZE = 1200;
+export const BRUSH_SIZES = [5, 14, 32];
 export const COLORS = [
   { name: 'Midnight', value: '#343044' }, { name: 'Paper', value: '#FFFFFF' },
   { name: 'Lilac', value: '#B39ADB' }, { name: 'Rose', value: '#EAA3B7' },
@@ -27,8 +29,8 @@ export function validDocument(doc) {
     (s.seed === undefined || (Number.isInteger(s.seed) && s.seed >= 0 && s.seed <= 0xffffffff)) &&
     (s.sprayVersion === undefined || [2, 3].includes(s.sprayVersion)) &&
     (s.shape === undefined ? (s.style === undefined || ['solid', 'dashed', 'rough'].includes(s.style)) : BRUSH_SHAPES.includes(s.shape) && BRUSH_STYLES.includes(s.style)) &&
-    COLORS.some(c => c.value === s.color) && [5,14,32].includes(s.size) &&
-    Array.isArray(s.points) && s.points.length > 0 && s.points.every(p => Array.isArray(p) && p.length === 2 && p.every(n => Number.isFinite(n) && n >= 0 && n <= 1200)));
+    COLORS.some(c => c.value === s.color) && BRUSH_SIZES.includes(s.size) &&
+    Array.isArray(s.points) && s.points.length > 0 && s.points.every(p => Array.isArray(p) && p.length === 2 && p.every(n => Number.isFinite(n) && n >= 0 && n <= CANVAS_SIZE)));
 }
 export class History {
   constructor(doc = createDocument()) { this.document = doc; this.past = []; this.future = []; }

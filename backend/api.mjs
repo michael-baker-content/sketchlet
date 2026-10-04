@@ -3,6 +3,7 @@ import { neon } from '@neondatabase/serverless';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { easternDate, promptForDate } from '../src/prompts.js';
+import { CANVAS_SIZE } from '../src/model.js';
 import { readJson as body, allowedOrigins } from './http.mjs';
 import { normalizeDisplayName, profileDrawingCursor } from './profile.mjs';
 import { requireRatingName, validateVote, networkLimitKey, parseSkipped, balanceRatingQueue } from './ratings.mjs';
@@ -54,7 +55,7 @@ async function imageBytes(input) {
   try {
     const image = sharp(bytes, { limitInputPixels: 1440000 });
     const metadata = await image.metadata();
-    if (metadata.format !== 'png' || metadata.width !== 1200 || metadata.height !== 1200 || (metadata.pages || 1) !== 1) fail(400, 'drawing must be a 1200 × 1200 PNG');
+    if (metadata.format !== 'png' || metadata.width !== CANVAS_SIZE || metadata.height !== CANVAS_SIZE || (metadata.pages || 1) !== 1) fail(400, `drawing must be a ${CANVAS_SIZE} × ${CANVAS_SIZE} PNG`);
     return await image.png().toBuffer();
   } catch (error) { if (error.status) throw error; fail(400, 'could not read this drawing'); }
 }

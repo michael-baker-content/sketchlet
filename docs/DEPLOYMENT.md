@@ -16,7 +16,7 @@ The migrations add shared rate limits and guest display-name profiles. Existing 
 
 Display names are optional (up to 32 characters) and are cached in local storage. The database profile is associated with the existing guest cookie, and every drawing reads its current owner's name. Changing a name therefore updates attribution for earlier drawings too. Names are not unique login credentials and cannot claim another guest's drawings. Clearing the guest cookie or changing domains loses access to that guest identity even if the name is still cached locally.
 
-After backend changes, stop the running server with Ctrl+C and restart it with `npm run dev`. The local entry point is `local-server.mjs`. The current profile drawing list, rating, and interface updates require no new migrations or environment variables. Run the checks and build against the latest source before pushing.
+Run commands from the repository root. After backend changes, stop the running server with Ctrl+C and restart it with `npm run dev`. The local entry point is `backend/server.mjs`. The current profile drawing list, rating, and interface updates require no new migrations or environment variables. Run the checks and build against the latest source before pushing.
 
 ## 2. Put the project in GitHub
 
@@ -88,7 +88,7 @@ Start with credentials scoped to Production. Preview builds still load the drawi
 - Select a profile photo, save, and reopen the profile after refresh. Canceling a replacement should preserve the saved photo; removing and saving should clear it. Photos stay in local storage and are never sent with name updates or drawings.
 - Open profile and check “your drawings”: newest first, correct dates and ratings, and links to the corresponding drawing. A separate browser identity should not see these as its own. “Load more” should retain existing cards and add older entries.
 - Download a PNG from the drawing view without submitting it. Check that the two save actions fit at 320px and that full-screen mode still omits them and the footer.
-- `/.env.local`, `/.neon`, `/backend/api.mjs`, and `/local-server.mjs` return 404.
+- `/.env.local`, `/.neon`, `/backend/api.mjs`, `/backend/server.mjs`, and `/docs/DEPLOYMENT.md` return 404.
 - Vercel logs show no missing environment settings, table errors, or storage failures.
 
 Localhost and the hosted domain have different browser storage and guest cookies. Existing drawings in the same Neon database will be visible in the gallery, but the hosted browser will not automatically own drawings created as a localhost guest. Choose the long-term domain early; switching domains changes the guest identity again.

@@ -6,4 +6,5 @@ node_modules
 dist
 tests
 scripts/correct-*.mjs
-local-server.mjs
+backend/server.mjs
+docs

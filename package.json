@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node local-server.mjs",
-    "start": "node local-server.mjs",
+    "dev": "node backend/server.mjs",
+    "start": "node backend/server.mjs",
     "build": "node scripts/build.mjs",
     "test": "node --test",
-    "check": "node --check backend/api.mjs && node --check src/studio.js && node --check src/gallery.js && node --check api/index.js && node --test",
+    "check": "node --check backend/server.mjs && node --check backend/api.mjs && node --check src/studio.js && node --check src/gallery.js && node --check api/index.js && node --test",
     "db:migrate": "node scripts/migrate.mjs"
   },
   "engines": {

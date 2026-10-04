@@ -4,7 +4,8 @@ import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } fro
 import sharp from 'sharp';
 import { easternDate, promptForDate } from '../src/prompts.js';
 import { readJson as body, allowedOrigins } from './http.mjs';
-import { normalizeDisplayName } from './profile.mjs';
+import { normalizeDisplayName, profileDrawingCursor } from './profile.mjs';
+import { requireRatingName, validateVote, networkLimitKey, parseSkipped, balanceRatingQueue } from './ratings.mjs';
 
 const sql = neon(process.env.DATABASE_URL);
 const storage = new S3Client({ endpoint: process.env.AWS_ENDPOINT_URL_S3, region: process.env.AWS_REGION, forcePathStyle: true, credentials: { accessKeyId: process.env.AWS_ACCESS_KEY_ID, secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY } });
@@ -20,13 +21,13 @@ function visitor(req, res) {
   if (!token) { token = randomBytes(32).toString('hex'); res.setHeader('Set-Cookie', `sketchlet_guest=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000${secure ? '; Secure' : ''}`); }
   return createHash('sha256').update(token).digest('hex');
 }
-async function limit(owner) {
+async function limit(owner, maximum = 40) {
   const [record] = await sql`INSERT INTO sketchlet_rate_limits(key_hash,window_start,request_count) VALUES (${owner},now(),1)
     ON CONFLICT(key_hash) DO UPDATE SET
       request_count=CASE WHEN sketchlet_rate_limits.window_start<now()-interval '1 minute' THEN 1 ELSE sketchlet_rate_limits.request_count+1 END,
       window_start=CASE WHEN sketchlet_rate_limits.window_start<now()-interval '1 minute' THEN now() ELSE sketchlet_rate_limits.window_start END
     RETURNING request_count`;
-  if(record.request_count>40)fail(429,'please wait a moment before trying again');
+  if(record.request_count>maximum)fail(429,'please wait a moment before trying again');
 }
 async function today() {
   const day = easternDate();
@@ -63,8 +64,30 @@ export async function handleApi(req, res, pathname) {
     res.setHeader('Cache-Control','private, no-store');
     if (req.method === 'POST' && !origins.has(req.headers.origin)) fail(403, 'request origin does not match this site');
     const owner = visitor(req, res);
-    if(req.method==='POST')await limit(owner);
+    if(req.method==='POST' || pathname==='/api/queue') {
+      const network = networkLimitKey(req);
+      if (network) await limit(network, 120);
+      await limit(owner);
+    }
     const url = new URL(req.url, origin);
+    if (pathname === '/api/profile/drawings' && req.method === 'GET') {
+      const before = profileDrawingCursor(url.searchParams.get('before'));
+      // The authenticated guest cookie is the only ownership filter. One entry per day
+      // makes the prompt date a stable cursor even when new drawings are submitted.
+      const rows = await sql`SELECT d.id,d.prompt_day::text AS day,p.title,d.owner_hash,profile.display_name,
+        (SELECT avg(stars) FROM sketchlet_votes v WHERE v.drawing_id=d.id) AS average,
+        (SELECT count(*) FROM sketchlet_votes v WHERE v.drawing_id=d.id) AS count
+        FROM sketchlet_drawings d JOIN sketchlet_prompts p ON p.day=d.prompt_day
+        LEFT JOIN sketchlet_profiles profile ON profile.owner_hash=d.owner_hash
+        WHERE d.owner_hash=${owner} AND (${before}::date IS NULL OR d.prompt_day<${before}::date)
+        ORDER BY d.prompt_day DESC LIMIT 25`;
+      const page = rows.slice(0,24);
+      json(res,200,{drawings:page.map(row=>publicDrawing(row,owner)),next:rows.length>24?page.at(-1).day:null}); return;
+    }
+    if (pathname === '/api/profile' && req.method === 'GET') {
+      const [profile] = await sql`SELECT display_name FROM sketchlet_profiles WHERE owner_hash=${owner}`;
+      json(res,200,{displayName:profile?.display_name ?? null}); return;
+    }
     if (pathname === '/api/profile' && req.method === 'POST') {
       const input = await body(req);
       const displayName = normalizeDisplayName(input.displayName);
@@ -103,8 +126,19 @@ export async function handleApi(req, res, pathname) {
       json(res, 201, publicDrawing((await drawings(owner, null, id))[0], owner)); return;
     }
     if (pathname === '/api/archive' && req.method === 'GET') {
-      const rows = await sql`SELECT p.day::text AS date,p.title AS prompt,count(d.id)::int AS count FROM sketchlet_prompts p JOIN sketchlet_drawings d ON d.prompt_day=p.day GROUP BY p.day,p.title ORDER BY p.day DESC LIMIT 90`;
-      json(res, 200, rows); return;
+      const rows = await sql`WITH prompt_groups AS (
+        SELECT p.day,p.title,count(d.id)::int AS count
+        FROM sketchlet_prompts p JOIN sketchlet_drawings d ON d.prompt_day=p.day
+        GROUP BY p.day,p.title ORDER BY p.day DESC LIMIT 90
+      ) SELECT p.day::text AS date,p.title AS prompt,p.count,cover.id AS cover_id
+        FROM prompt_groups p CROSS JOIN LATERAL (
+          SELECT d.id FROM sketchlet_drawings d
+          LEFT JOIN sketchlet_votes v ON v.drawing_id=d.id
+          WHERE d.prompt_day=p.day GROUP BY d.id
+          ORDER BY avg(v.stars) DESC NULLS LAST,count(v.stars) DESC,d.created_at DESC,d.id DESC
+          LIMIT 1
+        ) cover ORDER BY p.day DESC`;
+      json(res, 200, rows.map(({cover_id,...prompt}) => ({...prompt,image:`/api/drawings/${cover_id}/image` }))); return;
     }
     if (pathname === '/api/gallery' && req.method === 'GET') {
       const day = url.searchParams.get('date');
@@ -112,18 +146,39 @@ export async function handleApi(req, res, pathname) {
       json(res, 200, (await drawings(owner, day)).map(row => publicDrawing(row, owner))); return;
     }
     if (pathname === '/api/queue' && req.method === 'GET') {
-      const items = (await drawings(owner,null,null,true)).map(row => publicDrawing(row,owner));
-      const order = group => { const low = [...group].sort((a,b) => a.count-b.count); const high = [...group].sort((a,b) => ((b.average || 0)*b.count/(b.count+5))-((a.average || 0)*a.count/(a.count+5))); const out = [], seen = new Set(); while (out.length < group.length) { const list = out.length % 4 === 3 ? high : low; const item = list.find(d => !seen.has(d.id)); if (!item) break; seen.add(item.id); out.push(item); } return out; };
-      json(res,200,[...order(items.filter(d=>d.date===easternDate())),...order(items.filter(d=>d.date!==easternDate()))]); return;
+      const [profile] = await sql`SELECT display_name FROM sketchlet_profiles WHERE owner_hash=${owner}`;
+      requireRatingName(profile?.display_name);
+      const skipped = parseSkipped(url.searchParams.get('skip'));
+      const day = easternDate();
+      // Rank across the whole archive before limiting, with separate daily pools.
+      const rows = await sql`WITH eligible AS (
+        SELECT d.id,d.prompt_day::text AS day,p.title,d.owner_hash,profile.display_name,
+          stats.average,stats.count,random() AS lottery
+        FROM sketchlet_drawings d JOIN sketchlet_prompts p ON p.day=d.prompt_day
+        LEFT JOIN sketchlet_profiles profile ON profile.owner_hash=d.owner_hash
+        CROSS JOIN LATERAL (SELECT avg(stars) AS average,count(*) AS count FROM sketchlet_votes v WHERE v.drawing_id=d.id) stats
+        WHERE d.owner_hash<>${owner} AND NOT(d.id=ANY(${skipped}::uuid[]))
+          AND NOT EXISTS(SELECT 1 FROM sketchlet_votes v WHERE v.drawing_id=d.id AND v.voter_hash=${owner})
+      ), ranked AS (
+        SELECT *,row_number() OVER(PARTITION BY day=${day} ORDER BY count,lottery) AS low_rank,
+          row_number() OVER(PARTITION BY day=${day} ORDER BY coalesce(average,0)*count/(count+5) DESC,lottery) AS favorite_rank
+        FROM eligible
+      ) SELECT * FROM ranked WHERE low_rank<=60 OR favorite_rank<=20`;
+      const items = rows.map(row => ({ ...publicDrawing(row,owner), lottery: Number(row.lottery) }));
+      json(res,200,balanceRatingQueue(items,day).map(({lottery,...item}) => item)); return;
     }
     const match = pathname.match(/^\/api\/drawings\/([^/]+)(?:\/(image|vote))?$/);
     if (match) {
       const [, id, action] = match; if (!uuid.test(id)) fail(404,'drawing not found');
       if (action === 'vote' && req.method === 'POST') {
-        const input = await body(req); if (!Number.isInteger(input.stars) || input.stars<1 || input.stars>5) fail(400,'choose 1–5 stars');
+        const input = await body(req);
+        const [profile] = await sql`SELECT display_name FROM sketchlet_profiles WHERE owner_hash=${owner}`;
+        requireRatingName(profile?.display_name);
         const [drawing] = await sql`SELECT owner_hash FROM sketchlet_drawings WHERE id=${id}`;
-        if (!drawing) fail(404,'drawing not found'); if (drawing.owner_hash===owner) fail(403,'you cannot rate your own drawing');
-        await sql`INSERT INTO sketchlet_votes(drawing_id,voter_hash,stars) VALUES (${id},${owner},${input.stars}) ON CONFLICT(drawing_id,voter_hash) DO NOTHING`;
+        if (!drawing) fail(404,'drawing not found');
+        validateVote(profile.display_name,owner,drawing.owner_hash,input.stars);
+        await sql`INSERT INTO sketchlet_votes(drawing_id,voter_hash,stars) VALUES (${id},${owner},${input.stars})
+          ON CONFLICT(drawing_id,voter_hash) DO UPDATE SET stars=EXCLUDED.stars`;
         json(res,200,publicDrawing((await drawings(owner,null,id))[0],owner)); return;
       }
       if (req.method !== 'GET' || (action && action !== 'image')) fail(405,'method not allowed');
@@ -137,7 +192,7 @@ export async function handleApi(req, res, pathname) {
     }
     fail(404,'not found');
   } catch (error) {
-    if (error.status) json(res,error.status,{error:error.message});
+    if (error.status) { if(error.status===429)res.setHeader('Retry-After','60'); json(res,error.status,{error:error.message,...(error.code ? {code:error.code} : {})}); }
     else { console.error('Gallery request failed. Verify migrations, Neon connectivity, and bucket access.'); json(res,503,{error:'the gallery is temporarily unavailable. your draft is still on this device.'}); }
   }
 }

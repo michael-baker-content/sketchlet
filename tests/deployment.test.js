@@ -48,5 +48,9 @@ test('deployment publishes only dist and routes drawing URLs to the app',async()
   const config=JSON.parse(await readFile(new URL('../vercel.json',import.meta.url),'utf8'));
   assert.equal(config.outputDirectory,'dist');
   assert.ok(config.rewrites.some(rule=>rule.source==='/d/:id' && rule.destination==='/index.html'));
+  assert.ok(config.rewrites.some(rule=>rule.source==='/gallery' && rule.destination==='/index.html'));
+  assert.equal(publicFile('/gallery'),'index.html');
+  assert.equal(publicFile('/gallery/'),'index.html');
+  assert.equal(publicFile('/gallery/private'),null);
   assert.ok(config.rewrites.some(rule=>rule.source==='/api/:path*' && rule.destination.startsWith('/api/index?')));
 });

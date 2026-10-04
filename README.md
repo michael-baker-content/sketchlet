@@ -1,71 +1,98 @@
-# Sketchlet
+# sketchlet
 
-A daily drawing app with a retro web interface. Visitors draw a shared action-and-noun prompt, save one final drawing per day to a gallery, and rate other drawings. Neon Postgres stores prompts, submissions, and votes; the private `drawings` bucket stores PNGs. No user-facing login is required.
+a crying dog. a laughing kite. your interpretation.
 
-Live site: [sketchlet-blush.vercel.app](https://sketchlet-blush.vercel.app/).
+Sketchlet is a daily drawing playground with a soft spot for the old web: purple panels, chunky buttons, handwritten type, and room for a very silly drawing. A quick doodle belongs here just as much as something you've spent an hour on.
 
-## Local setup
+[**draw today's prompt →**](https://sketchlet-blush.vercel.app/)
 
-Requires Node.js 22.20 or newer. The user runs CLI/npm commands. Dependencies are pinned in the committed lockfile:
+## a little drawing every day
 
-```powershell
-npm ci
-npm run db:migrate
-npm test
-npm run dev
-```
+Everyone gets the same action-and-noun prompt. It changes at **midnight Eastern time**, including daylight saving time.
 
-Stop the old server with Ctrl+C before starting the new one. `npm run dev` runs `local-server.mjs`. Migrations apply the numbered SQL files in `db/` to the database specified by `.env.local` (currently the linked Neon production branch). They do not drop tables and are safe to rerun. For isolated testing, use a Neon development branch and pull its environment before migrating.
+Draw, erase, change your mind, and keep going. Your unfinished canvas saves automatically in this browser. Each day's draft stays attached to its own prompt, so yesterday's kite won't accidentally become today's flower.
 
-Open http://localhost:5173. If credentials, packages, or tables are missing, drawing still works, but gallery saving is disabled or reports an error. The application does not silently treat local preview saves as gallery submissions.
+When you're ready:
 
-Neon environment variables live in `.env.local`; see `.env.example` for variable names without values. `neon env pull --service postgres --service object-storage` refreshes these settings. Keep `.env*`, `.neon`, and `node_modules` out of Git. Commit `.env.example`, `neon.ts`, migrations, application source, package.json, and the updated lockfile.
+- **save to gallery** publishes your drawing after a confirmation. You get one submission per day, and it's final once saved.
+- **download** keeps a PNG on your device. It doesn't publish anything or use your daily submission.
 
-## Drawing and gallery
+Each published drawing has its own shareable link, where you can return to see its ratings. Drawing on consecutive days builds your participation streak.
 
-Square 1200px canvas; mouse, touch, and pen input; 24 ink/background colors; three sizes and solid, dashed, and rough brushes; transparent eraser; 60 undo steps plus redo; undoable clear; local IndexedDB draft; and a 60ms trailing animation respecting reduced motion. Ctrl/Cmd+Z undoes; Ctrl/Cmd+Shift+Z redoes. History lasts for the current session.
+## inside the pencil case
 
-The primary action is **save to gallery**, followed by a final-submission confirmation. Uploads are decoded and re-encoded as PNGs on the server. The database enforces one submission per guest per prompt, one vote per guest per drawing, and star values from 1 to 5. Private bucket objects are read through the server; credentials never go to the browser. Individual drawings have `/d/<uuid>` URLs.
+The canvas is square, with a 1200 × 1200 pixel export and support for mouse, touch, and pen input.
 
-Optional display names are entered during submission or edited through **your name** in the header. They are cached in local storage and stored in a guest profile. Gallery, drawing, and rating views read the current profile, so edits apply to all drawings owned by that guest, including earlier submissions. Blank names appear as anonymous; names are not unique accounts or ownership credentials.
+| pick | what's inside |
+| --- | --- |
+| color | 24 colors for both ink and background, from soft pastels to midnight, navy, and forest |
+| size | fine, mid, and bold |
+| shape | circle, square, and rough |
+| style | brush, dashed, dotted, marker, spray, and pencil |
+| second thoughts | eraser, undo, redo, and an undoable clear |
 
-Phones and portrait tablets (761–1100px) use a stacked drawing layout with dropdown tools. Full-screen drawing preserves the current canvas and undo history and prevents page scrolling. The full-screen button hides on desktop widths of 1101px or more only when the normal page fits without scrolling.
+Shapes work across every brush style and the eraser. Marker strokes are translucent, pencil grain builds up as you draw over it, and spray scatters small shaped dots.
 
-A random HttpOnly guest cookie identifies the browser; only its hash is stored in Postgres. Clearing cookies creates a new identity, so this is not strong anti-abuse protection. No email/password service is configured. Direct drawing links are viewable; the interface requires today's submission before entering the rating queue. Shared-link immediate voting remains a product decision.
+Strokes have a slight trailing animation, with reduced-motion preferences respected. Undo remembers up to 60 edits during the current session. **Ctrl/Cmd+Z** undoes; **Ctrl/Cmd+Shift+Z** redoes.
 
-Prompt dates are computed by the server in `America/New_York`. Old prompt titles are retained once recorded. Drafts are saved under separate daily keys and only restored for their matching date; switching days also clears undo/redo and the previous background. Focus, visibility, and midnight checks refresh the prompt while the page is open. Save review and final confirmation verify the server date, and snapshots retain their original date even if midnight passes. Old daily drafts, local preview submissions, and the undated legacy draft remain stored; undated drafts are never assigned to a new prompt automatically. There is no old-draft recovery interface yet.
+Phones and tablets get compact dropdown tools. Full-screen mode puts the drawing workspace in charge: no page scrolling, no header, and no submission buttons in the way. Close it to return to the normal page with your canvas and history intact. Desktop works too.
 
-## Project structure
+## take a look around
 
-- `src/studio.js` and `src/model.js`: drawing and draft persistence.
-- `src/gallery.js`: connected daily, submission, gallery, and rating interface.
-- `src/flow.js`: preserved earlier preview implementation; not loaded by the app.
-- `src/prompts.js`: shared prompt/date logic.
-- `backend/api.mjs`: server-only Neon and S3 integration.
-- `backend/public-files.mjs`: explicit public asset allowlist.
-- `backend/profile.mjs`: display-name validation.
-- `db/` and `scripts/migrate.mjs`: database setup, shared write limits, and guest profiles.
-- `api/index.js` and `vercel.json`: Vercel routing and function adapter.
-- `scripts/build.mjs`: copies only public files into `dist/`.
-- `retro.css`, `playful.css`, `styles.css`, `flow.css`: styling.
+The [gallery](https://sketchlet-blush.vercel.app/gallery) groups drawings by prompt. Each prompt's preview shows its highest-rated drawing, or its newest submission if nobody has rated one yet.
 
-## Validation before deployment
+You can rate drawings **before making your own**. Add a name to your profile, then give drawings 1–5 stars or skip. The queue mixes today's drawings, older prompts, under-rated entries, and favorites. Your own drawings stay out of the queue, and you can revise an earlier vote from a drawing's page.
 
-Run `npm run check`, `npm run db:migrate`, and `npm run build` before deploying changes. The user confirmed all three passed for the display-name feature. The subsequent Enter-key form fix still needs a browser check. Commands and server processes remain user-managed.
+Old prompts remain open for looking and rating; new submissions belong to today's prompt.
 
-After installation, migration, and restart, verify in the browser:
+## your little corner
 
-1. Existing draft restores. Canceling save preserves it.
-2. Saving creates an image in the private bucket and a drawing record. Reload and revisit its URL.
-3. Repeated submission returns the existing drawing. The guest cannot rate its own image.
-4. A separate browser identity can view the image, submit its own drawing, and rate. Repeating a vote does not add another vote.
-5. Archive and averages reflect database records. PNGs remain readable after restart.
-6. `/.env.local`, `/.neon`, `/backend/api.mjs`, and `/local-server.mjs` return 404 without content.
+There is no login. Sketchlet remembers this browser using a guest cookie.
 
-Also verify that entering or editing a name updates an older drawing owned by the same guest, and that another browser sees the updated name. In both name-entry dialogs, Enter should save and Cancel should leave the current state unchanged. The agent has not performed these browser checks or pushed changes.
+Your profile holds an optional display name and a newest-first collection of **your drawings**, with dates and ratings. Changing your name updates the attribution on earlier drawings too. Names aren't unique or verified; leaving yours blank displays “anonymous.” A name is required for rating.
 
-## Before public deployment
+You can also add a profile photo for your own interface. It is resized and saved locally in your browser, never uploaded or shown to other visitors.
 
-Vercel is the selected host. Follow [DEPLOYMENT.md](DEPLOYMENT.md) for import settings, secrets, migrations, Git commands, and verification. The deployment build never runs migrations. Guest-specific responses are not publicly cached; cookies use Secure on Vercel, and POST origins are checked against exact configured deployment URLs. Shared write limits live in Postgres. Add moderation/reporting and orphaned-image reconciliation before broad public use. Gallery results are capped at 200 drawings and 90 prompt dates pending pagination.
+A few things to keep in mind:
 
-Fonts load from Google Fonts with local fallbacks. Drafts are browser/origin-specific. Clearing browser data removes them.
+- Drafts and profile photos live on this device.
+- Published drawings, names, and votes live on the server.
+- Clearing cookies or switching browsers or domains creates a different guest identity. Typing the same name does not reconnect your old drawings.
+- Old drafts stay separate, but there isn't an interface for reopening them yet.
+
+## behind the doodles
+
+Sketchlet uses **HTML, CSS, and JavaScript**, with the Canvas API doing the drawing. **Unkempt** from Google Fonts supplies the handwriting; beveled controls and lavender panels supply the nostalgia.
+
+**Vercel** serves the site and its Node.js API. **Neon Postgres** stores prompts, drawings, guest profiles, and votes. PNGs live in a private **Neon Object Storage** bucket and are served through the API. **Sharp** validates and re-encodes submitted images.
+
+The database enforces one drawing per guest per prompt and one editable vote per guest per drawing. Server-side checks block self-voting, and shared request limits help curb abuse. Without accounts, these are browser-based rules—not proof that each visitor is a different person.
+
+The main pieces are:
+
+- `src/studio.js`, `src/model.js`, and `src/brushes.js`: canvas, tools, undo, and draft storage.
+- `src/gallery.js`: daily prompts, submissions, profiles, galleries, and rating screens.
+- `backend/` and `db/`: API, validation, storage access, and database migrations.
+- `api/`, `scripts/`, and `vercel.json`: hosting, local development, and the public-file build.
+
+## still on the sketchpad
+
+Sketchlet is an early version. Accounts and cross-device history, community-suggested prompts, old-draft recovery, and moderation/reporting are future work.
+
+Public gallery browsing currently covers up to 90 prompt dates and 200 drawings per prompt. Your profile's drawing list loads in pages of 24.
+
+## keeping the pencils sharp
+
+Maintenance uses Node.js 22.20 or newer. Local credentials belong in `.env.local`; `.env.example` lists the required settings.
+
+| command | purpose |
+| --- | --- |
+| `npm ci` | install the locked dependencies |
+| `npm run dev` | start the local site at localhost:5173 |
+| `npm run check` | check JavaScript syntax and run tests |
+| `npm run build` | assemble the public files in `dist/` |
+| `npm run db:migrate` | apply database migrations when needed |
+
+Stop the existing local server before restarting after backend changes. Run checks and a build before pushing; Vercel builds from source and does not run migrations. Credentials and generated build output stay out of Git.
+
+[Deployment and release checks](DEPLOYMENT.md) · [Design direction](DESIGN.md)

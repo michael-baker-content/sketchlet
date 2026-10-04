@@ -6,7 +6,7 @@ The site name is Sketchlet, displayed as "sketchlet". Existing browser storage k
 
 Use the drawing studio's current retro-web treatment throughout the application. `retro.css` is the current visual reference.
 
-- Comic Sans with Comic Neue fallback; lowercase visible copy.
+- Unkempt from Google Fonts, with bold weight for the sketchlet header; lowercase visible copy.
 - Raised beveled buttons, inset fields and canvas, square corners, hard shadows.
 - Purple title bars and accents, muted gray-lavender panels, subtle tiled page background.
 - Selected controls appear pressed in. Keyboard focus remains clearly visible.
@@ -22,12 +22,12 @@ Use the drawing studio's current retro-web treatment throughout the application.
 - After submission, show the drawing, ratings, participation streak, and an option to rate more drawings.
 - Rate drawings individually with 1–5 stars or skip. Mix under-rated drawings with well-rated drawings; exclude the visitor's own submission.
 - Archive prompts allow rating but not new drawings in the MVP.
-- Current and best streaks are based on consecutive Eastern prompt dates.
-- Neon is the chosen database; a private drawings bucket and local environment settings are configured. Server integration is written but awaits dependency installation, migration, restart, and live verification.
+- Participation streaks are based on consecutive Eastern prompt dates.
+- Neon Postgres and a private drawings bucket store submitted drawings and ratings. Drafts remain on the current device.
 - Vercel is the selected web/API host. Deployment preparation and validation steps are in DEPLOYMENT.md; the user runs terminal commands and initiates deployment.
-- Shared-link rating rules remain undecided.
+- Rating requires a saved profile name, but does not require submitting a drawing. Shared links support rating and editing a previous vote; users cannot rate their own drawings.
 
-## Next interface work
+## Current interface
 
 1. Daily prompt and date surrounding the existing drawing studio.
 2. Submission review explaining that submitting is final.
@@ -35,8 +35,11 @@ Use the drawing studio's current retro-web treatment throughout the application.
 4. One-at-a-time rating view with star selection and skip.
 5. Empty states for a new community and an exhausted rating queue.
 6. Archive browsing and individual drawing pages.
+7. Editable profile with a local-only photo and a paginated list of this browser's drawings.
+8. Full-screen drawing on phones and tablets; narrow screens use two tool columns, with swatches in color menus.
+9. Separate gallery submission and PNG download buttons above a contrasting rules footer in normal view.
 
-The first pass was an interactive preview in `src/flow.js`. The user has now authorized Neon integration. `src/gallery.js` is the connected entry point, with save-to-gallery replacing downloading as the main drawing action. Keep previous local drafts and preview records intact. No sample votes or drawings are migrated automatically. Follow README setup and verification before treating the integration as complete.
+`src/gallery.js` is the connected entry point. Gallery submission is the primary action and PNG download is an optional local export. Keep previous local drafts and preview records intact. No sample votes or drawings are migrated automatically. Follow README and DEPLOYMENT.md for setup and release verification.
 
 ## Working agreement
 

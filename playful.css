@@ -1,4 +1,4 @@
-:root{font-family:'Comic Sans MS','Comic Sans','Comic Neue',cursive;color:#302641;background:#fff9e7;--line:#827294;--muted:#655574}
+:root{font-family:'Unkempt',cursive;color:#302641;background:#fff9e7;--line:#827294;--muted:#655574}
 body{background-image:none;text-transform:lowercase}
 button,input,select,textarea{ text-transform:lowercase }
 .eraser-cursor{display:none;position:absolute;pointer-events:none;z-index:2;border-radius:50%;border:1px solid #db3b46;background:rgba(219,59,70,.10);box-shadow:0 0 0 1px #fff;transform:translate(-50%,-50%);box-sizing:content-box}
@@ -27,7 +27,7 @@ button,input,select,textarea{ text-transform:lowercase }
 @media(max-width:760px){.toolbox .brush-style-section{grid-column:1 / -1;grid-row:3}.toolbox .background-section{grid-row:4}.toolbox .history-actions{grid-row:5}}
 button,.brand,.intro h1,.section-label,.section-label h2{font-family:inherit}
 .site-header{height:70px;border-bottom:2px solid #443452;padding:0 28px}
-.brand{font-size:28px;letter-spacing:-1px}
+.brand{font-size:28px;font-weight:700;letter-spacing:-1px}
 main{padding-top:22px}
 .intro{text-align:left;margin-bottom:18px}
 .intro h1{font-size:30px;letter-spacing:0;margin:0}

@@ -1,4 +1,5 @@
 import { COLORS, createDocument, draftKey, restoreDraft, History } from './model.js';
+import { BRUSH_SHAPES, BRUSH_STYLES, createBrushRenderer, roughVertices } from './brushes.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#canvas');
@@ -11,7 +12,8 @@ committedInk.width = committedInk.height = 1200;
 const committedCtx = committedInk.getContext('2d');
 let renderedStrokes = null;
 let history = new History();
-let tool = 'brush', color = COLORS[0].value, size = 14, brushStyle = 'solid';
+let tool = 'brush', color = COLORS[0].value, size = 14, brushStyle = 'brush', brushShape = 'circle';
+const drawShapedStroke = createBrushRenderer(() => document.createElement('canvas'));
 let active = null, pointerId = null, ready = false, db = null, saveTimer, toastTimer;
 let promptDay = null, saveQueue = Promise.resolve(), dayQueue = Promise.resolve();
 const strokeTiming = new WeakMap();
@@ -29,6 +31,8 @@ function animateStroke(stroke, now) {
 const eraserCursor = document.createElement('div');
 eraserCursor.className = 'eraser-cursor';
 eraserCursor.setAttribute('aria-hidden', 'true');
+const roughOutline = roughVertices.map(([x, y]) => `${50 + x * 48},${50 + y * 48}`).join(' ');
+eraserCursor.innerHTML = `<svg viewBox="0 0 100 100"><polygon points="${roughOutline}" class="cursor-outline"/><polygon points="${roughOutline}"/></svg>`;
 $('#canvas-frame').append(eraserCursor);
 let cursorPoint = null;
 function updateEraserCursor(event) {
@@ -39,6 +43,7 @@ function updateEraserCursor(event) {
     cursorPoint.y >= rect.top && cursorPoint.y <= rect.bottom &&
     (cursorPoint.type !== 'touch' || active);
   eraserCursor.classList.toggle('visible', !!visible);
+  eraserCursor.dataset.shape = brushShape;
   canvas.style.cursor = tool === 'eraser' ? 'none' : 'crosshair';
   if (!visible) return;
   eraserCursor.style.width = `${size / 1200 * rect.width}px`;
@@ -59,6 +64,8 @@ document.addEventListener('scroll', () => { cursorPoint = null; eraserCursor.cla
 
 function toast(message) { $('#toast').textContent = message; $('#toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 2600); }
 function drawStroke(context, stroke) {
+  if (stroke.shape !== undefined) { drawShapedStroke(context, stroke); return; }
+  // Retain the original renderer for saved strokes without an explicit shape.
   context.save();
   context.globalCompositeOperation = stroke.tool === 'eraser' ? 'destination-out' : 'source-over';
   context.lineCap = context.lineJoin = 'round'; context.lineWidth = stroke.size; context.strokeStyle = context.fillStyle = stroke.color;
@@ -193,13 +200,19 @@ midButton.querySelector('span').textContent = 'mid';
 midButton.setAttribute('aria-label', 'mid brush');
 const styleSection = document.createElement('div');
 styleSection.className = 'tool-section brush-style-section';
-styleSection.innerHTML = '<div class="section-label"><h2>brush style</h2></div><div class="brush-styles" role="group" aria-label="brush style"><button data-style="solid" class="selected" aria-pressed="true"><svg viewBox="0 0 56 20" aria-hidden="true"><path d="M5 10h46"/></svg>solid</button><button data-style="dashed" aria-pressed="false"><svg viewBox="0 0 56 20" aria-hidden="true"><path d="M5 10h46" stroke-dasharray="8 8"/></svg>dashed</button><button data-style="rough" aria-pressed="false"><svg viewBox="0 0 56 20" aria-hidden="true"><path d="m4 11 5-4 4 4 5-3 5 4 5-5 5 3 5-2 4 4 5-4 5 3"/></svg>rough</button></div>';
+styleSection.innerHTML = '<label class="brush-select-label">brush style<select id="brush-style"></select></label>';
+const shapeSection = document.createElement('div');
+shapeSection.className = 'tool-section brush-shape-section';
+shapeSection.innerHTML = '<label class="brush-select-label">brush shape<select id="brush-shape"></select></label>';
 document.querySelector('.sizes').closest('.tool-section').after(styleSection);
-for (const button of styleSection.querySelectorAll('[data-style]')) button.onclick = () => {
-  brushStyle = button.dataset.style;
-  selectTool('brush');
-  for (const other of styleSection.querySelectorAll('[data-style]')) { other.classList.toggle('selected', other === button); other.setAttribute('aria-pressed', other === button); }
-};
+styleSection.before(shapeSection);
+for (const [select, options] of [[$('#brush-shape'), BRUSH_SHAPES], [$('#brush-style'), BRUSH_STYLES]]) {
+  for (const value of options) select.add(new Option(value, value));
+}
+function selectShape(value) { brushShape = value; $('#brush-shape').value = value; updateEraserCursor(); syncFocusTools(); }
+function selectStyle(value) { brushStyle = value; $('#brush-style').value = value; syncFocusTools(); }
+$('#brush-shape').onchange = event => selectShape(event.target.value);
+$('#brush-style').onchange = event => selectStyle(event.target.value);
 for (const b of document.querySelectorAll('[data-size]')) b.onclick = () => { size = Number(b.dataset.size); for (const other of document.querySelectorAll('[data-size]')) { other.classList.toggle('selected', b === other); other.setAttribute('aria-pressed', b === other); } };
 $('#undo').onclick = () => { if (ready && !active && history.undo()) changed(); };
 $('#redo').onclick = () => { if (ready && !active && history.redo()) changed(); };
@@ -209,7 +222,9 @@ canvas.addEventListener('pointerdown', event => {
   if (!ready || active || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
   hideDraftStatus();
   event.preventDefault(); pointerId = event.pointerId; canvas.setPointerCapture(pointerId);
-  active = { tool, color, size, style: brushStyle, points: [point(event)] };
+  active = { tool, color, size, style: brushStyle, shape: brushShape, points: [point(event)] };
+  if (tool === 'brush' && brushStyle === 'pencil') active.seed = crypto.getRandomValues(new Uint32Array(1))[0];
+  if (tool === 'brush' && brushStyle === 'spray') active.sprayVersion = 3;
   strokeTiming.set(active, [performance.now()]);
   render();
 });
@@ -224,9 +239,13 @@ function finish(event) { if (!active || event.pointerId !== pointerId) return; h
 canvas.addEventListener('pointerup', finish); canvas.addEventListener('pointercancel', finish); canvas.addEventListener('lostpointercapture', finish);
 document.addEventListener('keydown', event => {
   if (!ready || active || event.altKey || canvas.closest('[hidden]')) return;
+  // Text editing and secondary dialogs own their keyboard shortcuts.
+  if (event.target instanceof Element && event.target.closest('input,textarea,select,[contenteditable]:not([contenteditable="false"])')) return;
+  if (document.querySelector('dialog[open]:not(.drawing-focus)')) return;
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); if (event.shiftKey ? history.redo() : history.undo()) changed(); }
 });
 $('#download').onclick = () => {
+  if (!ready) return;
   // Export the complete document, including any points still finishing their animation.
   for (const stroke of history.document.strokes) strokeTiming.delete(stroke);
   renderedStrokes = null;
@@ -288,7 +307,7 @@ export function captureDraft(day) {
 }
 
 // Move the existing canvas into a modal workspace; its pixels, listeners and
-// history stay intact. Native selects keep menus within the device's own UI.
+// history stay intact. Color menus use a bounded dialog to show real swatches.
 const focusButton = document.createElement('button');
 focusButton.className = 'web-button focus-launch';
 focusButton.textContent = 'full screen';
@@ -298,12 +317,13 @@ const focusView = document.createElement('dialog');
 focusView.className = 'drawing-focus';
 focusView.setAttribute('aria-label', 'full screen drawing');
 focusView.innerHTML = `<div class="focus-info"><div class="focus-info-top"><p class="focus-date"><span class="focus-brand">sketchlet * </span><span class="focus-date-value"></span></p></div><h2 class="focus-prompt"></h2></div>
-  <div class="focus-actions"><div class="focus-history"></div><button class="web-button focus-close" aria-label="close full screen drawing">×</button></div>
+  <div class="focus-actions"><div class="focus-history"></div><button class="web-button focus-close" aria-label="close full screen drawing"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 5 14 14M19 5 5 19"/></svg></button></div>
   <div class="focus-canvas"></div>
   <div class="focus-tools" aria-label="drawing tools">
     <label>tools<select data-focus="tool"><option value="brush">draw</option><option value="eraser">erase</option></select></label>
     <label>brush size<select data-focus="size"><option value="5">fine</option><option value="14">mid</option><option value="32">bold</option></select></label>
-    <label>brush style<select data-focus="style"><option>solid</option><option>dashed</option><option>rough</option></select></label>
+    <label>brush shape<select data-focus="shape"></select></label>
+    <label>brush style<select data-focus="style"></select></label>
     <label>color<select data-focus="color"></select></label>
     <label>background<select data-focus="background"></select></label>
   </div>`;
@@ -330,23 +350,84 @@ function syncFocusInfo() {
 const focusInfoObserver = new MutationObserver(syncFocusInfo);
 focusInfoObserver.observe($('.intro'), { subtree: true, childList: true, characterData: true });
 const focusSelect = name => sharedTools.querySelector(`[data-focus="${name}"]`);
+for (const [name, options] of [['shape', BRUSH_SHAPES], ['style', BRUSH_STYLES]]) {
+  for (const value of options) focusSelect(name).add(new Option(value, value));
+}
 for (const name of ['color', 'background']) for (const entry of COLORS) {
   const option = document.createElement('option');
   option.value = entry.value; option.textContent = entry.name.toLowerCase();
   focusSelect(name).append(option);
 }
+const colorMenu = document.createElement('dialog');
+colorMenu.className = 'color-menu';
+colorMenu.setAttribute('aria-labelledby', 'color-menu-title');
+colorMenu.innerHTML = '<div class="color-menu-heading"><h2 id="color-menu-title"></h2><button type="button" class="web-button" aria-label="close colors">×</button></div><div class="color-menu-options"></div>';
+document.body.append(colorMenu);
+let activeColorMenu = null;
+colorMenu.querySelector('.color-menu-heading button').onclick = () => colorMenu.close();
+colorMenu.addEventListener('click', event => { if (event.target === colorMenu) colorMenu.close(); });
+for (const entry of COLORS) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'color-menu-option';
+  button.dataset.color = entry.value;
+  const swatch = document.createElement('span');
+  swatch.className = 'color-menu-swatch';
+  swatch.style.backgroundColor = entry.value;
+  swatch.setAttribute('aria-hidden', 'true');
+  button.append(swatch, document.createTextNode(entry.name.toLowerCase()));
+  button.onclick = () => {
+    const select = focusSelect(activeColorMenu);
+    select.value = entry.value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+    colorMenu.close();
+  };
+  colorMenu.querySelector('.color-menu-options').append(button);
+}
+for (const name of ['color', 'background']) {
+  const select = focusSelect(name);
+  select.hidden = true;
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'focus-color-menu';
+  button.dataset.colorMenu = name;
+  button.setAttribute('aria-haspopup', 'dialog');
+  button.innerHTML = '<span class="color-menu-swatch" aria-hidden="true"></span><span class="color-menu-value"></span><span aria-hidden="true">▾</span>';
+  select.after(button);
+  button.onclick = () => {
+    activeColorMenu = name;
+    colorMenu.querySelector('h2').textContent = name;
+    for (const option of colorMenu.querySelectorAll('.color-menu-option')) {
+      option.setAttribute('aria-pressed', String(option.dataset.color === select.value));
+    }
+    colorMenu.showModal();
+    colorMenu.querySelector('[aria-pressed="true"]')?.focus();
+  };
+}
 function syncFocusTools() {
+  $('#download').disabled = !ready;
   focusSelect('tool').value = tool;
   focusSelect('size').value = String(size);
   focusSelect('style').value = brushStyle;
+  focusSelect('shape').value = brushShape;
   focusSelect('color').value = color;
   focusSelect('background').value = history.document.background;
-  for (const name of ['color', 'background']) focusSelect(name).style.borderLeftColor = focusSelect(name).value;
+  for (const name of ['color', 'background']) {
+    const select = focusSelect(name);
+    const button = sharedTools.querySelector(`[data-color-menu="${name}"]`);
+    button.querySelector('.color-menu-swatch').style.backgroundColor = select.value;
+    button.querySelector('.color-menu-value').textContent = select.selectedOptions[0]?.textContent ?? '';
+    button.setAttribute('aria-label', `${name}: ${select.selectedOptions[0]?.textContent ?? ''}`);
+    button.disabled = !ready;
+  }
   for (const select of sharedTools.querySelectorAll('select')) select.disabled = !ready;
+  focusSelect('style').disabled = !ready || tool === 'eraser';
+  $('#brush-style').disabled = tool === 'eraser';
 }
 focusSelect('tool').onchange = event => { selectTool(event.target.value); syncFocusTools(); };
 focusSelect('size').onchange = event => { document.querySelector(`[data-size="${event.target.value}"]`).click(); syncFocusTools(); };
-focusSelect('style').onchange = event => { document.querySelector(`[data-style="${event.target.value}"]`).click(); syncFocusTools(); };
+focusSelect('style').onchange = event => selectStyle(event.target.value);
+focusSelect('shape').onchange = event => selectShape(event.target.value);
 focusSelect('color').onchange = event => { document.querySelector(`[data-ink="${event.target.value}"]`).click(); syncFocusTools(); };
 focusSelect('background').onchange = event => { document.querySelector(`[data-background="${event.target.value}"]`).click(); syncFocusTools(); };
 new MutationObserver(syncFocusTools).observe($('.toolbox'), {

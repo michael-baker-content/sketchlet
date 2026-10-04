@@ -1,3 +1,4 @@
+import { BRUSH_SHAPES, BRUSH_STYLES } from './brushes.js';
 export const COLORS = [
   { name: 'Midnight', value: '#343044' }, { name: 'Paper', value: '#FFFFFF' },
   { name: 'Lilac', value: '#B39ADB' }, { name: 'Rose', value: '#EAA3B7' },
@@ -22,7 +23,11 @@ export function restoreDraft(record, day) {
 }
 export function validDocument(doc) {
   return doc && COLORS.some(c => c.value === doc.background) && Array.isArray(doc.strokes) && doc.strokes.every(s =>
-    ['brush', 'eraser'].includes(s.tool) && (s.style === undefined || ['solid', 'dashed', 'rough'].includes(s.style)) && COLORS.some(c => c.value === s.color) && [5,14,32].includes(s.size) &&
+    ['brush', 'eraser'].includes(s.tool) &&
+    (s.seed === undefined || (Number.isInteger(s.seed) && s.seed >= 0 && s.seed <= 0xffffffff)) &&
+    (s.sprayVersion === undefined || [2, 3].includes(s.sprayVersion)) &&
+    (s.shape === undefined ? (s.style === undefined || ['solid', 'dashed', 'rough'].includes(s.style)) : BRUSH_SHAPES.includes(s.shape) && BRUSH_STYLES.includes(s.style)) &&
+    COLORS.some(c => c.value === s.color) && [5,14,32].includes(s.size) &&
     Array.isArray(s.points) && s.points.length > 0 && s.points.every(p => Array.isArray(p) && p.length === 2 && p.every(n => Number.isFinite(n) && n >= 0 && n <= 1200)));
 }
 export class History {

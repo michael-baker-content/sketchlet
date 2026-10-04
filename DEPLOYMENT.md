@@ -16,7 +16,7 @@ The migrations add shared rate limits and guest display-name profiles. Existing 
 
 Display names are optional (up to 32 characters) and are cached in local storage. The database profile is associated with the existing guest cookie, and every drawing reads its current owner's name. Changing a name therefore updates attribution for earlier drawings too. Names are not unique login credentials and cannot claim another guest's drawings. Clearing the guest cookie or changing domains loses access to that guest identity even if the name is still cached locally.
 
-After backend changes, restart your local server with `npm run dev`. The local entry point is `local-server.mjs`. The user confirmed the checks, build, and profile migration passed; the subsequent Enter-key form fix still needs browser verification.
+After backend changes, stop the running server with Ctrl+C and restart it with `npm run dev`. The local entry point is `local-server.mjs`. The current profile drawing list, rating, and interface updates require no new migrations or environment variables. Run the checks and build against the latest source before pushing.
 
 ## 2. Put the project in GitHub
 
@@ -82,9 +82,12 @@ Start with credentials scoped to Production. Preview builds still load the drawi
 - Today's prompt loads, drawing works, and save creates a gallery entry.
 - `/d/<drawing-id>` works when opened directly and refreshed.
 - Saved images load from the private bucket through the API.
-- Rating from another browser works; self-voting and duplicate voting remain blocked.
+- Rating from another browser requires a saved name but no drawing submission. Self-voting remains blocked. Updating an existing rating changes its stars while keeping the vote count unchanged.
 - Refresh restores only the draft for the current prompt date.
-- Enter a name when submitting, then edit it using “your name” in the header. Refresh an older drawing owned by the same guest and verify its attribution changes, including when viewed from a different browser. Clearing the name should show “anonymous”.
+- Enter a name when submitting, then edit it using “profile” in the header. Refresh an older drawing owned by the same guest and verify its attribution changes, including when viewed from a different browser. Clearing the name should show “anonymous”.
+- Select a profile photo, save, and reopen the profile after refresh. Canceling a replacement should preserve the saved photo; removing and saving should clear it. Photos stay in local storage and are never sent with name updates or drawings.
+- Open profile and check “your drawings”: newest first, correct dates and ratings, and links to the corresponding drawing. A separate browser identity should not see these as its own. “Load more” should retain existing cards and add older entries.
+- Download a PNG from the drawing view without submitting it. Check that the two save actions fit at 320px and that full-screen mode still omits them and the footer.
 - `/.env.local`, `/.neon`, `/backend/api.mjs`, and `/local-server.mjs` return 404.
 - Vercel logs show no missing environment settings, table errors, or storage failures.
 
@@ -93,7 +96,8 @@ Localhost and the hosted domain have different browser storage and guest cookies
 ## Initial release limits
 
 - JSON uploads are capped at 4,000,000 bytes to leave room below Vercel's 4.5 MB function limit. Large drawings show a clear error without losing the local draft. A future direct-to-storage upload flow can remove this limit.
-- Postgres enforces 40 writes per guest per minute across function instances. Clearing cookies creates a new guest, so use Vercel Firewall rate limits for broader abuse protection before a large public launch. Rate-limit records can be pruned periodically.
+- Postgres enforces 40 POST requests/queue loads per guest and 120 per client IP per minute across function instances. Network keys contain hashes rather than raw IP addresses. Vercel requests use its overwritten `x-forwarded-for` header; local requests use the socket. No new environment variables or migration are required for this rating update. Shared networks share this allowance. Vercel Firewall rules remain an additional deployment-level option, not configured by this change. Rate-limit records can be pruned periodically.
+- Rating queue candidates are ranked across the full archive before a bounded batch is selected. Both current-day and archive candidates get low-count and favorite slots. Large galleries may eventually need cached aggregates or a dedicated queue; query cost still grows with the collection.
 - Gallery reads are capped at 200 drawings and 90 prompt dates; pagination and moderation/reporting are future work.
 - An interrupted save can leave an unreferenced storage object. A reconciliation job is still needed for long-term housekeeping.
 

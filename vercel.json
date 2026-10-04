@@ -9,6 +9,8 @@
   },
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/index?__sketchlet_path=:path*" },
+    { "source": "/gallery", "destination": "/index.html" },
+    { "source": "/gallery/", "destination": "/index.html" },
     { "source": "/d/:id", "destination": "/index.html" }
   ],
   "headers": [

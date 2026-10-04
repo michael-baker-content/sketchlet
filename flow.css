@@ -1,8 +1,103 @@
 [hidden]{display:none!important}
+.history-button-text{padding-right:4px}
+html{scrollbar-gutter:auto}
+.site-header nav a{display:inline-flex;align-items:center;min-height:44px;padding:8px 0;color:#4a147b;text-underline-offset:3px}
+.site-header nav{display:flex;align-items:center;gap:12px}
+.name-nav{border:0;background:none;padding:8px 0;min-height:44px;color:#4a147b;text-decoration:underline;text-underline-offset:3px}
+.name-field{display:flex;flex-direction:column;gap:6px;text-align:left;font-size:14px}
+.name-field input{width:100%;min-width:0;min-height:44px;padding:8px;border:3px inset #eee;background:#f8f4fc;font:inherit;font-size:16px;text-transform:none}
+.name-field small{font-size:12px;color:#594a64}
+.drawing-author,.archive-card .drawing-author{display:block;font-size:13px;overflow-wrap:anywhere;margin:4px 0 10px;text-transform:none}
+.submission-dialog{max-height:calc(100dvh - 24px);overflow-y:auto}
+.mobile-sketch-info .focus-brand{display:none}
+.focus-launch{font-size:12px;min-height:36px;padding:4px 8px}
+/* Preserve the header geometry so hiding the control cannot change the fit. */
+.focus-launch.page-fits{visibility:hidden;pointer-events:none}
+.studio-top:has(.focus-launch){height:auto;min-height:43px}
+.studio-top>.focus-launch{margin-block:8px}
+.studio-top>div{min-width:0}
+.studio-title{overflow-wrap:anywhere}
+body:has(.studio:not([hidden])) .intro h1{display:none}
+html.drawing-focused{min-width:320px;overflow:hidden;overscroll-behavior:none}
+.drawing-focused body{position:fixed;width:100%;min-width:320px;overflow:hidden;overscroll-behavior:none}
+.drawing-focus{position:fixed;inset:auto;margin:0;max-width:none;max-height:none;box-sizing:border-box;border:0;padding:8px;padding-top:max(8px,env(safe-area-inset-top));padding-bottom:max(8px,env(safe-area-inset-bottom));padding-left:max(8px,env(safe-area-inset-left));padding-right:max(8px,env(safe-area-inset-right));background:#d5d0d9;color:#271438;font:inherit;text-transform:lowercase;overflow:hidden;overscroll-behavior:none;touch-action:none}
+.drawing-focus[open]{display:grid;min-width:320px;grid-template-rows:auto minmax(44px,1fr) auto minmax(min-content,1fr);gap:8px}
+.focus-info{min-width:0;padding:4px 8px;border:2px inset #eee;background:#e7d9f5;overflow-wrap:anywhere}
+.focus-info p{margin:0;font-size:12px;line-height:1.3}
+.focus-info-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.focus-info-top .focus-date{flex-shrink:0;text-align:left}
+.focus-info h2{margin:2px 0;font-size:20px;line-height:1.2;color:#4a147b;text-align:center}
+@media(max-width:760px){.focus-info h2{font-size:14px}}
+@media(max-width:760px), (min-width:761px) and (max-width:1100px) and (orientation:portrait){
+  .focus-info{display:flex;flex-wrap:wrap;align-items:center;column-gap:12px;row-gap:2px}
+  .focus-info-top{flex:0 0 auto;max-width:100%}
+  .focus-info h2{flex:1 1 auto;min-width:0;max-width:100%;margin:0}
+}
+.drawing-focus::backdrop{background:#d5d0d9}
+.focus-actions{display:flex;justify-content:center;align-self:center;gap:12px;min-width:0}
+.focus-history{flex:1;max-width:300px;min-width:0}
+.drawing-focus .history-actions{display:flex;margin:0;padding:0;border:0;gap:6px;height:44px}
+.drawing-focus .history-label{display:none}
+.drawing-focus .history-actions button{height:44px;min-width:0}
+.focus-close{width:44px;min-height:44px;padding:0;font-size:26px;flex-shrink:0}
+.focus-canvas{display:flex;align-items:center;justify-content:center;min-height:0;min-width:0;overflow:hidden}
+.drawing-focus .canvas-frame{flex:none;max-width:100%;max-height:100%}
+.focus-tools{display:grid;align-self:center;grid-template-columns:repeat(6,minmax(0,1fr));gap:6px;min-width:0}
+.focus-tools label{grid-column:span 2;display:flex;flex-direction:column;gap:3px;min-width:0;font-size:12px}
+.focus-tools label:nth-last-child(-n+2){grid-column:span 3}
+.focus-tools select{width:100%;min-width:0;height:44px;padding:3px;font:inherit;font-size:16px;border:3px inset #eee;border-radius:0;background:#f8f4fc;color:#271438;touch-action:manipulation}
+.focus-tools select[data-focus="color"],.focus-tools select[data-focus="background"]{border-left-width:12px}
+.focus-tools select:focus-visible{outline:2px dotted #32124f;outline-offset:1px}
+@media(orientation:landscape) and (max-height:600px){
+  .drawing-focus[open]{grid-template-columns:minmax(0,1fr) 210px;grid-template-rows:auto 44px minmax(0,1fr)}
+  .drawing-focus .focus-actions{grid-column:2;grid-row:2}
+  .drawing-focus .focus-info{grid-column:2;grid-row:1}
+  .drawing-focus .focus-canvas{grid-column:1;grid-row:1 / 4}
+  .drawing-focus .focus-tools{grid-column:2;grid-row:3;grid-template-columns:repeat(2,minmax(0,1fr));align-content:start}
+  .drawing-focus .focus-tools label,.drawing-focus .focus-tools label:nth-last-child(-n+2){grid-column:auto}
+  .drawing-focus .focus-tools label:last-child{grid-column:1 / -1}
+}
+.mobile-sketch-info,.mobile-sketch-actions,.mobile-sketch-tools{display:none}
+/* Phones and portrait tablets share the drawing-first organization. */
+@media(max-width:760px), (min-width:761px) and (max-width:1100px) and (orientation:portrait){
+  main{padding-left:8px;padding-right:8px}
+  .studio .studio-top,.studio .toolbox{display:none}
+  .studio .studio-body{display:flex;flex-direction:column;gap:16px;padding:10px}
+  .studio .canvas-column{width:100%;max-width:none}
+  .mobile-sketch-info,.mobile-sketch-tools{display:block;width:100%;min-width:0}
+  .mobile-sketch-actions{display:flex;width:100%;align-items:center;gap:8px}
+  .mobile-sketch-actions .history-actions{display:flex;flex:1;max-width:300px;min-width:0;margin:0;padding:0;border:0;gap:5px}
+  .mobile-sketch-actions .history-label{display:none}
+  .mobile-sketch-actions .history-actions button{height:44px;min-width:0}
+  .mobile-sketch-actions .focus-launch{min-height:44px;flex-shrink:0;padding:4px 6px;font-size:12px}
+  body:has(.studio:not([hidden])) .intro .daily-heading>div{display:none}
+  body:has(.studio:not([hidden])) .intro .daily-heading{justify-content:flex-end}
+  body:has(.studio:not([hidden])) .intro{display:none}
+}
+@media(min-width:761px) and (max-width:1100px) and (orientation:portrait){
+  .mobile-sketch-actions .history-actions{gap:8px}
+  .mobile-sketch-actions .focus-launch{padding:6px 12px;font-size:14px}
+  .mobile-sketch-tools .focus-tools,.drawing-focus .focus-tools{gap:10px}
+  .mobile-sketch-tools label,.drawing-focus .focus-tools label{font-size:14px}
+}
 .share-label{display:block;margin-top:18px;font-size:13px}
+@media(min-width:700px) and (max-width:760px), (min-width:761px) and (max-width:1100px) and (orientation:portrait){
+  .studio .studio-body{display:grid;grid-template-columns:minmax(0,1fr) 300px;align-items:center}
+  .mobile-sketch-info{grid-column:1;grid-row:1}
+  .mobile-sketch-actions{grid-column:2;grid-row:1}
+  .studio .canvas-column,.mobile-sketch-tools{grid-column:1 / -1}
+}
+@media(min-width:700px) and (min-height:601px){
+  .drawing-focus[open]{grid-template-columns:minmax(0,1fr) 300px;grid-template-rows:minmax(min-content,1fr) auto minmax(min-content,1fr)}
+  .drawing-focus .focus-info{grid-column:1;grid-row:1;align-self:center}
+  .drawing-focus .focus-actions{grid-column:2;grid-row:1}
+  .drawing-focus .focus-canvas{grid-column:1 / -1;grid-row:2}
+  .drawing-focus .focus-tools{grid-column:1 / -1;grid-row:3}
+}
 .share-link{display:block;width:100%;min-width:0;padding:8px;margin-top:6px;border:2px inset #eee;font:12px monospace;text-transform:none}
 .archive-grid .prompt-card{display:block}
-html,body{min-width:320px}
+/* Freeze the layout below 320px, allowing only the actual scrollbar width. */
+html,body{min-width:calc(320px - var(--page-scrollbar-width, 0px))}
 main,.studio-body,.canvas-column,.toolbox,.tool-section,.daily-heading>*,.submission-layout>*,.panel-title>*{min-width:0}
 .daily-heading h1,.panel-title h2,.submission-info h3{overflow-wrap:anywhere}
 .panel-title{flex-wrap:wrap}
@@ -40,7 +135,11 @@ main,.studio-body,.canvas-column,.toolbox,.tool-section,.daily-heading>*,.submis
 .web-button.primary{background:#c8e5b5;color:#244019;font-weight:bold}
 .web-button:active{border-color:#74657f #fff #fff #74657f}
 .web-button:disabled{opacity:.5;cursor:default}
-.submit-bar{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-top:22px;font-size:13px}
+.submit-bar{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:22px;font-size:13px;text-align:center}
+.submit-bar #review-drawing{width:100%;max-width:320px;align-self:center}
+.submit-actions{display:flex;justify-content:center;align-items:center;gap:12px;width:100%;max-width:520px;align-self:center}
+.submit-actions #review-drawing{flex:0 1 320px;min-width:0}
+.submit-actions .save-status{flex:0 1 auto;max-width:40%;color:#493655;font-size:12px;text-align:left;overflow-wrap:anywhere}
 .flow-panel,.submission-dialog{background:#d5d0d9;border:3px solid;border-color:#fff #675c72 #675c72 #fff;border-radius:0;box-shadow:2px 2px #362740}
 .panel-title{background:#663399;color:white;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px}
 .panel-title h2{font-size:20px;margin:0}.panel-title>span{font-size:12px}.panel-title .web-button{font-size:12px}

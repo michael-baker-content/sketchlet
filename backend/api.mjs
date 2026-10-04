@@ -4,6 +4,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } fro
 import sharp from 'sharp';
 import { easternDate, promptForDate } from '../src/prompts.js';
 import { readJson as body, allowedOrigins } from './http.mjs';
+import { normalizeDisplayName } from './profile.mjs';
 
 const sql = neon(process.env.DATABASE_URL);
 const storage = new S3Client({ endpoint: process.env.AWS_ENDPOINT_URL_S3, region: process.env.AWS_REGION, forcePathStyle: true, credentials: { accessKeyId: process.env.AWS_ACCESS_KEY_ID, secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY } });
@@ -33,14 +34,15 @@ async function today() {
   return record;
 }
 function publicDrawing(row, owner) {
-  return { id: row.id, date: row.day, prompt: row.title, image: `/api/drawings/${row.id}/image`, url: `/d/${row.id}`, mine: row.owner_hash === owner, average: row.average === null ? null : Number(row.average), count: Number(row.count || 0), myVote: row.my_vote ? Number(row.my_vote) : null };
+  return { id: row.id, date: row.day, prompt: row.title, displayName: row.display_name || '', image: `/api/drawings/${row.id}/image`, url: `/d/${row.id}`, mine: row.owner_hash === owner, average: row.average === null ? null : Number(row.average), count: Number(row.count || 0), myVote: row.my_vote ? Number(row.my_vote) : null };
 }
 async function drawings(owner, day = null, id = null, queue = false) {
-  return sql`SELECT d.id, d.prompt_day::text AS day, p.title, d.owner_hash,
+  return sql`SELECT d.id, d.prompt_day::text AS day, p.title, d.owner_hash, profile.display_name,
     (SELECT avg(stars) FROM sketchlet_votes v WHERE v.drawing_id=d.id) AS average,
     (SELECT count(*) FROM sketchlet_votes v WHERE v.drawing_id=d.id) AS count,
     (SELECT stars FROM sketchlet_votes v WHERE v.drawing_id=d.id AND v.voter_hash=${owner}) AS my_vote
     FROM sketchlet_drawings d JOIN sketchlet_prompts p ON p.day=d.prompt_day
+    LEFT JOIN sketchlet_profiles profile ON profile.owner_hash=d.owner_hash
     WHERE (${day}::date IS NULL OR d.prompt_day=${day}::date) AND (${id}::uuid IS NULL OR d.id=${id}::uuid)
     AND (NOT ${queue} OR (d.owner_hash<>${owner} AND NOT EXISTS(SELECT 1 FROM sketchlet_votes v WHERE v.drawing_id=d.id AND v.voter_hash=${owner})))
     ORDER BY d.prompt_day DESC, d.created_at DESC LIMIT 200`;
@@ -63,6 +65,14 @@ export async function handleApi(req, res, pathname) {
     const owner = visitor(req, res);
     if(req.method==='POST')await limit(owner);
     const url = new URL(req.url, origin);
+    if (pathname === '/api/profile' && req.method === 'POST') {
+      const input = await body(req);
+      const displayName = normalizeDisplayName(input.displayName);
+      // Ownership comes only from the guest cookie, never a submitted name or id.
+      await sql`INSERT INTO sketchlet_profiles(owner_hash,display_name) VALUES (${owner},${displayName})
+        ON CONFLICT(owner_hash) DO UPDATE SET display_name=EXCLUDED.display_name,updated_at=now()`;
+      json(res, 200, { displayName }); return;
+    }
     if (pathname === '/api/today' && req.method === 'GET') {
       const prompt = await today();
       const [mine] = await sql`SELECT id FROM sketchlet_drawings WHERE owner_hash=${owner} AND prompt_day=${prompt.day}::date`;
@@ -72,7 +82,8 @@ export async function handleApi(req, res, pathname) {
       let end = Date.parse(prompt.day + 'T12:00:00Z');
       if (!set.has(prompt.day)) end -= 86400000;
       while (set.has(new Date(end - streak * 86400000).toISOString().slice(0,10))) streak++;
-      json(res, 200, { date: prompt.day, prompt: prompt.title, submission: rows[0] ? publicDrawing(rows[0], owner) : null, streak }); return;
+      const [profile] = await sql`SELECT display_name FROM sketchlet_profiles WHERE owner_hash=${owner}`;
+      json(res, 200, { date: prompt.day, prompt: prompt.title, displayName: profile?.display_name ?? null, submission: rows[0] ? publicDrawing(rows[0], owner) : null, streak }); return;
     }
     if (pathname === '/api/drawings' && req.method === 'POST') {
       const input = await body(req); const prompt = await today();

@@ -12,13 +12,17 @@ npm run build
 npm run db:migrate
 ```
 
-The migration adds `sketchlet_rate_limits` to support shared limits across Vercel instances. Existing data is preserved. The build copies an explicit list of public files into `dist`; it does not load credentials, run migrations, or alter Neon. GitHub Actions repeats the checks and build on pushes and pull requests without database credentials.
+The migrations add shared rate limits and guest display-name profiles. Existing data is preserved. Run the migrations before deploying code that uses profiles. The build copies an explicit list of public files into `dist`; it does not load credentials, run migrations, or alter Neon. GitHub Actions repeats the checks and build on pushes and pull requests without database credentials.
 
-Stop your current local server with Ctrl+C, then restart with `npm run dev`. The local entry point is now `local-server.mjs`; your npm command stays the same. Check saving and rating after the migration. These newly added checks have not been executed by the agent.
+Display names are optional (up to 32 characters) and are cached in local storage. The database profile is associated with the existing guest cookie, and every drawing reads its current owner's name. Changing a name therefore updates attribution for earlier drawings too. Names are not unique login credentials and cannot claim another guest's drawings. Clearing the guest cookie or changing domains loses access to that guest identity even if the name is still cached locally.
+
+After backend changes, restart your local server with `npm run dev`. The local entry point is `local-server.mjs`. The user confirmed the checks, build, and profile migration passed; the subsequent Enter-key form fix still needs browser verification.
 
 ## 2. Put the project in GitHub
 
-There was no Git repository in this workspace when deployment files were prepared. If that is still true:
+The project is already hosted on GitHub and Vercel. For routine updates, commit and push the source changes after validation; Vercel builds the public assets from source. Do not commit `dist/` or environment files. Run new migrations before pushing code that requires them.
+
+For a fresh checkout that has not yet been initialized:
 
 ```powershell
 git init -b main
@@ -80,6 +84,7 @@ Start with credentials scoped to Production. Preview builds still load the drawi
 - Saved images load from the private bucket through the API.
 - Rating from another browser works; self-voting and duplicate voting remain blocked.
 - Refresh restores only the draft for the current prompt date.
+- Enter a name when submitting, then edit it using “your name” in the header. Refresh an older drawing owned by the same guest and verify its attribution changes, including when viewed from a different browser. Clearing the name should show “anonymous”.
 - `/.env.local`, `/.neon`, `/backend/api.mjs`, and `/local-server.mjs` return 404.
 - Vercel logs show no missing environment settings, table errors, or storage failures.
 

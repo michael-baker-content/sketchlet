@@ -124,7 +124,8 @@ function syncControls() {
   $('#clear').disabled = !history.document.strokes.length;
   for (const button of document.querySelectorAll('[data-background]')) { const selected = button.dataset.background === history.document.background; button.classList.toggle('selected', selected); button.setAttribute('aria-pressed', selected); }
 }
-function changed() { render(); syncControls(); scheduleSave(); }
+function hideDraftStatus() { $('#save-status').hidden = true; }
+function changed() { hideDraftStatus(); render(); syncControls(); scheduleSave(); }
 function selectTool(next) { tool = next; for (const id of ['brush', 'eraser']) { $('#' + id).classList.toggle('selected', id === tool); $('#' + id).setAttribute('aria-pressed', id === tool); } updateEraserCursor(); }
 for (const entry of COLORS) {
   for (const background of [false, true]) {
@@ -171,7 +172,8 @@ for (const background of [false, true]) {
 document.addEventListener('click', event => { for (const picker of document.querySelectorAll('.color-picker')) if (!picker.contains(event.target)) picker.open = false; });
 $('#brush').onclick = () => selectTool('brush'); $('#eraser').onclick = () => selectTool('eraser');
 document.querySelectorAll('.section-label h2').forEach((heading, index) => { heading.textContent = ['Tools', 'Color', 'Brush size', 'Background'][index]; });
-$('.studio-title').textContent = 'Drawing canvas';
+$('.studio-title').textContent = "today's prompt";
+$('#save-status').textContent = 'ready';
 const editLabel = document.createElement('span');
 editLabel.className = 'history-label';
 editLabel.id = 'history-label';
@@ -179,6 +181,13 @@ editLabel.textContent = 'edit';
 $('.history-actions').prepend(editLabel);
 $('.history-actions').setAttribute('role', 'group');
 $('.history-actions').setAttribute('aria-labelledby', 'history-label');
+for (const id of ['undo', 'redo']) {
+  const button = $('#' + id);
+  const label = document.createElement('span');
+  label.className = 'history-button-text';
+  for (const node of [...button.childNodes]) if (node.nodeType === Node.TEXT_NODE) label.append(node);
+  button.append(label);
+}
 const midButton = document.querySelector('[data-size="14"]');
 midButton.querySelector('span').textContent = 'mid';
 midButton.setAttribute('aria-label', 'mid brush');
@@ -198,6 +207,7 @@ $('#clear').onclick = () => { if (!ready || active || !history.document.strokes.
 function point(event) { const rect = canvas.getBoundingClientRect(); return [Math.max(0, Math.min(1200, (event.clientX - rect.left) / rect.width * 1200)), Math.max(0, Math.min(1200, (event.clientY - rect.top) / rect.height * 1200))]; }
 canvas.addEventListener('pointerdown', event => {
   if (!ready || active || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+  hideDraftStatus();
   event.preventDefault(); pointerId = event.pointerId; canvas.setPointerCapture(pointerId);
   active = { tool, color, size, style: brushStyle, points: [point(event)] };
   strokeTiming.set(active, [performance.now()]);
@@ -222,10 +232,10 @@ $('#download').onclick = () => {
   renderedStrokes = null;
   render(); canvas.toBlob(blob => { if (!blob) { toast('Could not save the image. Please try again.'); return; } const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'sketchlet.png'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000); toast('PNG downloaded.'); }, 'image/png');
 };
-function scheduleSave() { $('#save-status').textContent = 'Saving your draft…'; clearTimeout(saveTimer); saveTimer = setTimeout(() => persist(), 200); }
+function scheduleSave() { $('#save-status').textContent = 'saving…'; clearTimeout(saveTimer); saveTimer = setTimeout(() => persist(), 200); }
 async function persist() {
   if (!promptDay) return;
-  if (!db) { $('#save-status').textContent = 'Draft saving unavailable'; return; }
+  if (!db) { $('#save-status').textContent = 'saving unavailable'; return; }
   // Capture the date and document together before any async work or day switch.
   const day = promptDay, record = { day, document: history.document };
   saveQueue = saveQueue.catch(() => {}).then(() => new Promise((resolve, reject) => {
@@ -233,15 +243,15 @@ async function persist() {
     tx.objectStore('drafts').put(record, draftKey(day));
     tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
   }));
-  try { await saveQueue; if (day === promptDay) $('#save-status').textContent = 'Draft saved for this prompt'; }
-  catch { $('#save-status').textContent = 'Couldn’t save draft on this device'; }
+  try { await saveQueue; if (day === promptDay) $('#save-status').textContent = 'draft saved'; }
+  catch { $('#save-status').textContent = 'couldn’t save draft'; }
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden && ready) { clearTimeout(saveTimer); persist(); } });
 window.addEventListener('pagehide', () => { if (ready) { clearTimeout(saveTimer); persist(); } });
 async function initialize() {
   try {
     db = await new Promise((resolve, reject) => { const req = indexedDB.open('little-canvas', 1); req.onupgradeneeded = () => req.result.createObjectStore('drafts'); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); req.onblocked = () => reject(new Error('Storage blocked')); });
-  } catch { $('#save-status').textContent = 'Draft saving unavailable'; }
+  } catch { $('#save-status').textContent = 'saving unavailable'; }
   render(); syncControls();
 }
 render(); syncControls();
@@ -255,6 +265,7 @@ export function setPromptDay(day) {
     if (active) { history.commit({ ...history.document, strokes: [...history.document.strokes, active] }); active = null; pointerId = null; }
     await persist();
     promptDay = day; history = new History(); renderedStrokes = null; cursorPoint = null;
+    $('#save-status').hidden = false;
     render(); syncControls(); updateEraserCursor();
     try {
       const saved = db ? await new Promise((resolve, reject) => {
@@ -262,8 +273,8 @@ export function setPromptDay(day) {
         req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
       }) : null;
       history = new History(restoreDraft(saved, day));
-      $('#save-status').textContent = !db ? 'Draft saving unavailable' : saved?.day === day ? 'Draft restored for this prompt' : 'Fresh canvas for this prompt';
-    } catch { $('#save-status').textContent = 'Draft saving unavailable'; }
+      $('#save-status').textContent = !db ? 'saving unavailable' : saved?.day === day ? 'draft restored' : 'fresh canvas';
+    } catch { $('#save-status').textContent = 'saving unavailable'; }
     ready = true; $('.toolbox').inert = false; render(); syncControls();
   });
   return dayQueue;
@@ -275,3 +286,174 @@ export function captureDraft(day) {
   renderedStrokes = null; render();
   return { date: promptDay, image: canvas.toDataURL('image/png') };
 }
+
+// Move the existing canvas into a modal workspace; its pixels, listeners and
+// history stay intact. Native selects keep menus within the device's own UI.
+const focusButton = document.createElement('button');
+focusButton.className = 'web-button focus-launch';
+focusButton.textContent = 'full screen';
+focusButton.setAttribute('aria-haspopup', 'dialog');
+$('.studio-top').append(focusButton);
+const focusView = document.createElement('dialog');
+focusView.className = 'drawing-focus';
+focusView.setAttribute('aria-label', 'full screen drawing');
+focusView.innerHTML = `<div class="focus-info"><div class="focus-info-top"><p class="focus-date"><span class="focus-brand">sketchlet * </span><span class="focus-date-value"></span></p></div><h2 class="focus-prompt"></h2></div>
+  <div class="focus-actions"><div class="focus-history"></div><button class="web-button focus-close" aria-label="close full screen drawing">×</button></div>
+  <div class="focus-canvas"></div>
+  <div class="focus-tools" aria-label="drawing tools">
+    <label>tools<select data-focus="tool"><option value="brush">draw</option><option value="eraser">erase</option></select></label>
+    <label>brush size<select data-focus="size"><option value="5">fine</option><option value="14">mid</option><option value="32">bold</option></select></label>
+    <label>brush style<select data-focus="style"><option>solid</option><option>dashed</option><option>rough</option></select></label>
+    <label>color<select data-focus="color"></select></label>
+    <label>background<select data-focus="background"></select></label>
+  </div>`;
+document.body.append(focusView);
+const sharedInfo = focusView.querySelector('.focus-info');
+const sharedTools = focusView.querySelector('.focus-tools');
+const normalInfo = document.createElement('div');
+normalInfo.className = 'mobile-sketch-info';
+const normalActions = document.createElement('div');
+normalActions.className = 'mobile-sketch-actions focus-actions';
+const normalTools = document.createElement('div');
+normalTools.className = 'mobile-sketch-tools';
+$('.studio-body').prepend(normalInfo, normalActions);
+$('.studio-body').append(normalTools);
+const launchHome = document.createComment('full screen button home');
+focusButton.before(launchHome);
+// Keep this aligned with the stacked studio breakpoint in flow.css.
+const stackedLayout = window.matchMedia('(max-width:760px), (min-width:761px) and (max-width:1100px) and (orientation:portrait)');
+function syncFocusInfo() {
+  const date = $('.prompt-date')?.textContent.split(' · ')[0] ?? '';
+  sharedInfo.querySelector('.focus-date-value').textContent = date;
+  sharedInfo.querySelector('.focus-prompt').textContent = `today's prompt: ${$('.daily-heading h1')?.textContent ?? ''}`;
+}
+const focusInfoObserver = new MutationObserver(syncFocusInfo);
+focusInfoObserver.observe($('.intro'), { subtree: true, childList: true, characterData: true });
+const focusSelect = name => sharedTools.querySelector(`[data-focus="${name}"]`);
+for (const name of ['color', 'background']) for (const entry of COLORS) {
+  const option = document.createElement('option');
+  option.value = entry.value; option.textContent = entry.name.toLowerCase();
+  focusSelect(name).append(option);
+}
+function syncFocusTools() {
+  focusSelect('tool').value = tool;
+  focusSelect('size').value = String(size);
+  focusSelect('style').value = brushStyle;
+  focusSelect('color').value = color;
+  focusSelect('background').value = history.document.background;
+  for (const name of ['color', 'background']) focusSelect(name).style.borderLeftColor = focusSelect(name).value;
+  for (const select of sharedTools.querySelectorAll('select')) select.disabled = !ready;
+}
+focusSelect('tool').onchange = event => { selectTool(event.target.value); syncFocusTools(); };
+focusSelect('size').onchange = event => { document.querySelector(`[data-size="${event.target.value}"]`).click(); syncFocusTools(); };
+focusSelect('style').onchange = event => { document.querySelector(`[data-style="${event.target.value}"]`).click(); syncFocusTools(); };
+focusSelect('color').onchange = event => { document.querySelector(`[data-ink="${event.target.value}"]`).click(); syncFocusTools(); };
+focusSelect('background').onchange = event => { document.querySelector(`[data-background="${event.target.value}"]`).click(); syncFocusTools(); };
+new MutationObserver(syncFocusTools).observe($('.toolbox'), {
+  subtree: true, attributes: true, attributeFilter: ['aria-pressed', 'inert'],
+});
+const canvasHome = document.createComment('canvas home');
+const historyHome = document.createComment('history home');
+const canvasFrame = $('#canvas-frame'), historyActions = $('.history-actions');
+canvasFrame.before(canvasHome); historyActions.before(historyHome);
+function arrangeNormalStudio() {
+  if (focusView.open) return;
+  if (stackedLayout.matches) {
+    normalInfo.append(sharedInfo);
+    normalActions.append(historyActions, focusButton);
+    normalTools.append(sharedTools);
+  } else {
+    focusView.prepend(sharedInfo);
+    focusView.append(sharedTools);
+    historyHome.after(historyActions);
+    launchHome.after(focusButton);
+  }
+  syncFocusInfo(); syncFocusTools();
+}
+stackedLayout.addEventListener('change', arrangeNormalStudio);
+let focusScroll = 0;
+function sizeFocusView() {
+  if (!focusView.open) return;
+  const viewport = window.visualViewport;
+  focusView.style.width = `${Math.max(320, viewport?.width ?? window.innerWidth)}px`;
+  focusView.style.height = `${viewport?.height ?? window.innerHeight}px`;
+  focusView.style.left = `${viewport?.offsetLeft ?? 0}px`;
+  focusView.style.top = `${viewport?.offsetTop ?? 0}px`;
+  const area = focusView.querySelector('.focus-canvas');
+  const layout = getComputedStyle(focusView);
+  const sideTools = window.matchMedia('(orientation:landscape) and (max-height:600px)').matches;
+  const sharedHeader = window.matchMedia('(min-width:700px) and (min-height:601px)').matches;
+  const infoHeight = sharedInfo.offsetHeight;
+  const actionsHeight = focusView.querySelector('.focus-actions').offsetHeight;
+  const headerHeight = sharedHeader ? Math.max(infoHeight, actionsHeight) : infoHeight + actionsHeight;
+  const availableHeight = sideTools ? area.clientHeight : focusView.clientHeight
+    - parseFloat(layout.paddingTop) - parseFloat(layout.paddingBottom)
+    - headerHeight
+    - focusView.querySelector('.focus-tools').offsetHeight
+    - parseFloat(layout.rowGap) * (sharedHeader ? 2 : 3);
+  const edge = Math.max(0, Math.min(area.clientWidth, availableHeight) - 2);
+  canvasFrame.style.width = canvasFrame.style.height = `${edge}px`;
+}
+new ResizeObserver(sizeFocusView).observe(focusView.querySelector('.focus-canvas'));
+window.visualViewport?.addEventListener('resize', sizeFocusView);
+window.visualViewport?.addEventListener('scroll', sizeFocusView);
+window.addEventListener('resize', sizeFocusView);
+focusButton.onclick = () => {
+  focusScroll = window.scrollY;
+  for (const picker of document.querySelectorAll('.color-picker')) picker.open = false;
+  focusView.prepend(sharedInfo);
+  focusView.append(sharedTools);
+  focusView.querySelector('.focus-canvas').append(canvasFrame);
+  focusView.querySelector('.focus-history').append(historyActions);
+  document.documentElement.classList.add('drawing-focused');
+  document.body.style.top = `-${focusScroll}px`;
+  syncFocusInfo(); focusView.showModal(); syncFocusTools(); sizeFocusView();
+  focusView.querySelector('.focus-close').focus();
+};
+focusView.querySelector('.focus-close').onclick = () => focusView.close();
+new MutationObserver(() => {
+  if ($('.studio').hidden && focusView.open) focusView.close();
+}).observe($('.studio'), { attributes: true, attributeFilter: ['hidden'] });
+focusView.addEventListener('close', () => {
+  if (active) finish({ pointerId });
+  canvasHome.after(canvasFrame); historyHome.after(historyActions);
+  canvasFrame.style.removeProperty('width'); canvasFrame.style.removeProperty('height');
+  document.documentElement.classList.remove('drawing-focused');
+  document.body.style.removeProperty('top');
+  arrangeNormalStudio();
+  window.scrollTo(0, focusScroll);
+  focusButton.focus({ preventScroll: true });
+});
+arrangeNormalStudio();
+
+let fitCheckFrame = null;
+function schedulePageFitCheck() {
+  if (fitCheckFrame !== null) return;
+  fitCheckFrame = requestAnimationFrame(() => {
+    fitCheckFrame = null;
+    // A fixed body inside the modal is not a measurement of the normal page.
+    if (focusView.open) return;
+    const root = document.documentElement;
+    const scrollbarWidth = Math.max(0, window.innerWidth - root.clientWidth);
+    const scrollbarSpace = `${scrollbarWidth}px`;
+    if (root.style.getPropertyValue('--page-scrollbar-width') !== scrollbarSpace) {
+      root.style.setProperty('--page-scrollbar-width', scrollbarSpace);
+    }
+    const viewport = window.visualViewport;
+    const visibleWidth = Math.min(root.clientWidth, viewport?.width ?? root.clientWidth);
+    const visibleHeight = Math.min(root.clientHeight, viewport?.height ?? root.clientHeight);
+    const fits = window.matchMedia('(min-width:1101px)').matches
+      && !stackedLayout.matches && !$('.studio').hidden
+      && root.scrollWidth <= visibleWidth + 1
+      && root.scrollHeight <= visibleHeight + 1;
+    // Keep keyboard focus visible if a resize makes the focused button redundant.
+    if (fits && document.activeElement === focusButton) canvas.focus({ preventScroll: true });
+    focusButton.classList.toggle('page-fits', fits);
+  });
+}
+new ResizeObserver(schedulePageFitCheck).observe(document.body);
+window.addEventListener('resize', schedulePageFitCheck);
+window.visualViewport?.addEventListener('resize', schedulePageFitCheck);
+focusView.addEventListener('close', schedulePageFitCheck);
+document.fonts.ready.then(schedulePageFitCheck);
+schedulePageFitCheck();

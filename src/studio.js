@@ -1,5 +1,6 @@
 import { COLORS, BRUSH_SIZES, CANVAS_SIZE, createDocument, draftKey, restoreDraft, History } from './model.js';
 import { BRUSH_SHAPES, BRUSH_STYLES, createBrushRenderer, roughVertices } from './brushes.js';
+import { createStrokeCache, watchCanvasRecovery } from './canvas-cache.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#canvas');
@@ -10,23 +11,20 @@ const inkCtx = ink.getContext('2d');
 const committedInk = document.createElement('canvas');
 committedInk.width = committedInk.height = CANVAS_SIZE;
 const committedCtx = committedInk.getContext('2d');
-let renderedStrokes = null;
+const strokeCache = createStrokeCache(committedCtx, CANVAS_SIZE, drawStroke);
 let history = new History();
 let tool = 'brush', color = COLORS[0].value, size = 14, brushStyle = 'brush', brushShape = 'circle';
-const drawShapedStroke = createBrushRenderer(() => document.createElement('canvas'));
+let drawShapedStroke = createBrushRenderer(() => document.createElement('canvas'));
+const canvasAvailable = watchCanvasRecovery([ctx, inkCtx, committedCtx], () => {
+  strokeCache.invalidate();
+  // Legacy pencil patterns may also have lost their backing storage.
+  drawShapedStroke = createBrushRenderer(() => document.createElement('canvas'));
+}, () => render());
 let active = null, pointerId = null, ready = false, db = null, saveTimer, toastTimer;
 let promptDay = null, saveQueue = Promise.resolve(), dayQueue = Promise.resolve();
-const strokeTiming = new WeakMap();
-const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
-const strokeDelay = () => motionPreference.matches ? 0 : 60;
-let animationFrame = null;
-function animateStroke(stroke, now) {
-  const times = strokeTiming.get(stroke);
-  if (!times || strokeDelay() === 0) return stroke;
-  const cutoff = now - strokeDelay();
-  let count = times.length;
-  while (count > 0 && times[count - 1] > cutoff) count--;
-  return count ? { ...stroke, points: stroke.points.slice(0, count) } : null;
+// Drawing gestures should never open an image menu or start a native drag.
+for (const type of ['contextmenu', 'dragstart', 'selectstart']) {
+  canvas.addEventListener(type, event => event.preventDefault());
 }
 const eraserCursor = document.createElement('div');
 eraserCursor.className = 'eraser-cursor';
@@ -106,25 +104,14 @@ function drawStroke(context, stroke) {
   context.restore();
 }
 function render() {
-  const now = performance.now();
-  const trailing = history.document.strokes.filter(stroke => {
-    const times = strokeTiming.get(stroke);
-    return times && times.at(-1) > now - strokeDelay();
-  });
-  if (renderedStrokes !== history.document.strokes) {
-    committedCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-    for (const stroke of history.document.strokes) if (!trailing.includes(stroke)) drawStroke(committedCtx, stroke);
-    renderedStrokes = trailing.length ? null : history.document.strokes;
-  }
+  if (!canvasAvailable()) return false;
+  strokeCache.sync(history.document.strokes);
   inkCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
   inkCtx.drawImage(committedInk, 0, 0);
-  for (const stroke of [...trailing, ...(active ? [active] : [])]) {
-    const visible = animateStroke(stroke, now);
-    if (visible) drawStroke(inkCtx, visible);
-  }
+  if (active) drawStroke(inkCtx, active);
   ctx.fillStyle = history.document.background; ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE); ctx.drawImage(ink, 0, 0);
   $('#canvas-hint').classList.toggle('hidden', history.document.strokes.length > 0 || !!active);
-  if ((trailing.length || active) && animationFrame === null) animationFrame = requestAnimationFrame(() => { animationFrame = null; render(); });
+  return canvasAvailable();
 }
 function syncControls() {
   $('#undo').disabled = !history.past.length; $('#redo').disabled = !history.future.length;
@@ -231,14 +218,13 @@ canvas.addEventListener('pointerdown', event => {
   active = { tool, color, size, style: brushStyle, shape: brushShape, points: [point(event)] };
   if (tool === 'brush' && brushStyle === 'pencil') active.seed = crypto.getRandomValues(new Uint32Array(1))[0];
   if (tool === 'brush' && brushStyle === 'spray') active.sprayVersion = 3;
-  strokeTiming.set(active, [performance.now()]);
   render();
 });
 let frame = null;
 canvas.addEventListener('pointermove', event => {
   if (!active || event.pointerId !== pointerId) return;
   const samples = event.getCoalescedEvents?.();
-  for (const e of samples?.length ? samples : [event]) { const p = point(e); const last = active.points.at(-1); if (Math.hypot(p[0]-last[0],p[1]-last[1]) > .5) { active.points.push(p); strokeTiming.get(active).push(performance.now()); } }
+  for (const e of samples?.length ? samples : [event]) { const p = point(e); const last = active.points.at(-1); if (Math.hypot(p[0]-last[0],p[1]-last[1]) > .5) active.points.push(p); }
   if (frame === null) frame = requestAnimationFrame(() => { frame = null; render(); });
 });
 function finish(event) { if (!active || event.pointerId !== pointerId) return; history.commit({ ...history.document, strokes: [...history.document.strokes, active] }); active = null; pointerId = null; changed(); }
@@ -252,10 +238,8 @@ document.addEventListener('keydown', event => {
 });
 $('#download').onclick = () => {
   if (!ready) return;
-  // Export the complete document, including any points still finishing their animation.
-  for (const stroke of history.document.strokes) strokeTiming.delete(stroke);
-  renderedStrokes = null;
-  render(); canvas.toBlob(blob => { if (!blob) { toast('Could not save the image. Please try again.'); return; } const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'sketchlet.png'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000); toast('PNG downloaded.'); }, 'image/png');
+  if (!render()) { toast('canvas recovering. please try again.'); return; }
+  canvas.toBlob(blob => { if (!blob || !canvasAvailable()) { toast('Could not save the image. Please try again.'); return; } const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'sketchlet.png'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000); toast('PNG downloaded.'); }, 'image/png');
 };
 function scheduleSave() { $('#save-status').textContent = 'saving…'; clearTimeout(saveTimer); saveTimer = setTimeout(() => persist(), 200); }
 async function persist() {
@@ -289,7 +273,7 @@ export function setPromptDay(day) {
     ready = false; $('.toolbox').inert = true; clearTimeout(saveTimer);
     if (active) { history.commit({ ...history.document, strokes: [...history.document.strokes, active] }); active = null; pointerId = null; }
     await persist();
-    promptDay = day; history = new History(); renderedStrokes = null; cursorPoint = null;
+    promptDay = day; history = new History(); strokeCache.invalidate(); cursorPoint = null;
     $('#save-status').hidden = false;
     render(); syncControls(); updateEraserCursor();
     try {
@@ -307,8 +291,7 @@ export function setPromptDay(day) {
 export function captureDraft(day) {
   if (!ready || promptDay !== day) throw new Error('the prompt changed. please review the current canvas.');
   if (active) throw new Error('finish your stroke before saving.');
-  for (const stroke of history.document.strokes) strokeTiming.delete(stroke);
-  renderedStrokes = null; render();
+  if (!render()) throw new Error('canvas recovering. please try saving again.');
   return { date: promptDay, image: canvas.toDataURL('image/png') };
 }
 

@@ -1,4 +1,6 @@
 [hidden]{display:none!important}
+/* Prevent long-press text selection inside the drawing workspace. */
+.studio,.drawing-focus,.color-menu{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 .prompt-date,.focus-date-value,.display-date{text-transform:none}
 .history-button-text{padding:0}
 .eraser-cursor[data-shape="square"]{border-radius:0}

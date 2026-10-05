@@ -33,7 +33,7 @@ The canvas is square, with a 1200 × 1200 pixel export and support for mouse, to
 
 Shapes work across every brush style and the eraser. Marker strokes are translucent, pencil grain builds up as you draw over it, and spray scatters small shaped dots.
 
-Strokes have a slight trailing animation, with reduced-motion preferences respected. Undo remembers up to 60 edits during the current session. **Ctrl/Cmd+Z** undoes; **Ctrl/Cmd+Shift+Z** redoes.
+Drawing and erasing follow your input without an added animation delay. The drawing workspace suppresses text selection and the canvas's long-press menu to keep gestures focused on drawing. Undo remembers up to 60 edits during the current session. **Ctrl/Cmd+Z** undoes; **Ctrl/Cmd+Shift+Z** redoes.
 
 Phones and tablets get compact dropdown tools. Full-screen mode puts the drawing workspace in charge: no page scrolling, no header, and no submission buttons in the way. Close it to return to the normal page with your canvas and history intact. Desktop works too.
 

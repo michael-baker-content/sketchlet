@@ -43,6 +43,18 @@ The home and gallery have separate document and JavaScript entry points. Home re
 
 Gallery submission is the primary action and PNG download is an optional local export. Keep previous local drafts and preview records intact. No sample votes or drawings are migrated automatically. Follow [README](../README.md) and [DEPLOYMENT.md](DEPLOYMENT.md) for setup and release verification.
 
+## Drawing performance and deferred statistics
+
+Drawing performance: completed strokes are cached. Live seeded pencil strokes append only new distance-spaced grain to the existing working buffer; other styles retain their single-fill rendering to preserve opacity and edges. Cache invalidation rebuilds from stroke data after context recovery or a history change. No additional canvas or persisted draft format is needed. Browser checks compare incremental pencil pixels against full replay and count grain operations; real-phone responsiveness still requires manual validation.
+
+Deferred, lowest-priority idea: collect lightweight creation statistics (palette, strokes, undos, brush usage by distance, active drawing time) for a restrained share-card visualization. Count user actions independently of rendering and save summaries alongside drafts. Do not implement tracking or display statistics yet; drawing performance takes priority.
+
+Pointer input shares one fresh canvas measurement across each event's coalesced samples. Measurements are not cached between events, so scrolling, resizing and full-screen transitions use current coordinates. Ordinary drawing skips eraser-overlay measurements. Ending a gesture cancels its queued preview before painting the committed result.
+
+Tool selection is shared editor state. Desktop palettes and compact/full-screen controls call the same selection functions and refresh directly from that state. Background changes remain document edits, so undo, redo and draft restoration refresh both sets of controls. Tool synchronization does not use mutation observers or simulated clicks; observers for page information and layout remain separate.
+
+Next: validate layered pencil shading, long regular-brush strokes, and erasing on the affected phone. Establish repeatable frame-time benchmarks before choosing further rendering changes. Keep canvas resolution, undo depth, and stroke length unchanged unless measurements justify limits.
+
 ## Working agreement
 
 The user runs CLI/npm commands. File edits and the existing browser preview can continue without running new commands.

@@ -1,7 +1,8 @@
 import { COLORS, BRUSH_SIZES, CANVAS_SIZE, createDocument, draftKey, restoreDraft, History } from './model.js';
 import { BRUSH_SHAPES, BRUSH_STYLES, createBrushRenderer, roughVertices } from './brushes.js';
-import { createStrokeCache, watchCanvasRecovery } from './canvas-cache.js';
+import { createStrokeCache, createActivePencilCache, watchCanvasRecovery } from './canvas-cache.js';
 import { setCloseIcon } from './close-button.js';
+import { canvasPoint, appendPointerSamples } from './pointer-input.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#canvas');
@@ -15,9 +16,16 @@ const committedCtx = committedInk.getContext('2d');
 const strokeCache = createStrokeCache(committedCtx, CANVAS_SIZE, drawStroke);
 let history = new History();
 let tool = 'brush', color = COLORS[0].value, size = 14, brushStyle = 'brush', brushShape = 'circle';
+// Views subscribe after their controls are constructed. State changes call this
+// directly; markup and synthetic input events are never the source of truth.
+let syncToolViews = () => {};
+const paletteViews = [];
 let drawShapedStroke = createBrushRenderer(() => document.createElement('canvas'));
+const activePencilCache = createActivePencilCache(inkCtx, CANVAS_SIZE,
+  (context, stroke, samples) => drawShapedStroke(context, stroke, samples));
 const canvasAvailable = watchCanvasRecovery([ctx, inkCtx, committedCtx], () => {
   strokeCache.invalidate();
+  activePencilCache.invalidate();
   // Legacy pencil patterns may also have lost their backing storage.
   drawShapedStroke = createBrushRenderer(() => document.createElement('canvas'));
 }, () => render());
@@ -36,6 +44,12 @@ $('#canvas-frame').append(eraserCursor);
 let cursorPoint = null;
 function updateEraserCursor(event) {
   if (event) cursorPoint = { x: event.clientX, y: event.clientY, type: event.pointerType };
+  // Ordinary drawing has no eraser overlay to measure or position.
+  if (tool !== 'eraser' || !cursorPoint) {
+    eraserCursor.classList.remove('visible');
+    canvas.style.cursor = tool === 'eraser' ? 'none' : 'crosshair';
+    return;
+  }
   const rect = canvas.getBoundingClientRect();
   const visible = tool === 'eraser' && cursorPoint &&
     cursorPoint.x >= rect.left && cursorPoint.x <= rect.right &&
@@ -107,9 +121,11 @@ function drawStroke(context, stroke) {
 function render() {
   if (!canvasAvailable()) return false;
   strokeCache.sync(history.document.strokes);
-  inkCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-  inkCtx.drawImage(committedInk, 0, 0);
-  if (active) drawStroke(inkCtx, active);
+  if (!activePencilCache.sync(active, history.document.strokes, committedInk)) {
+    inkCtx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+    inkCtx.drawImage(committedInk, 0, 0);
+    if (active) drawStroke(inkCtx, active);
+  }
   ctx.fillStyle = history.document.background; ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE); ctx.drawImage(ink, 0, 0);
   $('#canvas-hint').classList.toggle('hidden', history.document.strokes.length > 0 || !!active);
   return canvasAvailable();
@@ -118,24 +134,35 @@ function syncControls() {
   $('#undo').disabled = !history.past.length; $('#redo').disabled = !history.future.length;
   $('#clear').disabled = !history.document.strokes.length;
   for (const button of document.querySelectorAll('[data-background]')) { const selected = button.dataset.background === history.document.background; button.classList.toggle('selected', selected); button.setAttribute('aria-pressed', selected); }
+  syncToolViews();
 }
 function hideDraftStatus() { $('#save-status').hidden = true; }
 function changed() { hideDraftStatus(); render(); syncControls(); scheduleSave(); }
-function selectTool(next) { tool = next; for (const id of ['brush', 'eraser']) { $('#' + id).classList.toggle('selected', id === tool); $('#' + id).setAttribute('aria-pressed', id === tool); } updateEraserCursor(); }
+function selectTool(next) {
+  if (!['brush', 'eraser'].includes(next)) return;
+  tool = next;
+  syncToolViews(); updateEraserCursor();
+}
+function selectColor(value, background = false) {
+  if (!ready || !COLORS.some(entry => entry.value === value)) return;
+  if (background) {
+    if (active || history.document.background === value) return;
+    history.commit({ ...history.document, background: value }); changed();
+  } else {
+    color = value; selectTool('brush');
+  }
+}
 for (const entry of COLORS) {
   for (const background of [false, true]) {
     const button = document.createElement('button'); button.className = 'swatch'; button.style.setProperty('--color', entry.value); button.style.setProperty('--check', entry.name === 'Midnight' ? '#FFFFFF' : '#343044');
+    const rgb = entry.value.slice(1).match(/../g).map(channel => parseInt(channel, 16));
+    button.style.setProperty('--check', rgb[0] * .299 + rgb[1] * .587 + rgb[2] * .114 < 140 ? '#FFFFFF' : '#343044');
     button.title = entry.name.toLowerCase(); button.setAttribute('aria-label', `${entry.name.toLowerCase()} ${background ? 'background' : 'ink'}`); button.setAttribute('aria-pressed', false);
     if (background) button.dataset.background = entry.value; else button.dataset.ink = entry.value;
-    button.addEventListener('click', () => {
-      if (!ready) return;
-      if (background) { if (history.document.background === entry.value) return; history.commit({ ...history.document, background: entry.value }); changed(); }
-      else { color = entry.value; selectTool('brush'); $('#color-name').textContent = entry.name; $('#color-hex').textContent = entry.value; for (const b of document.querySelectorAll('[data-ink]')) { b.classList.toggle('selected', b === button); b.setAttribute('aria-pressed', b === button); } }
-    });
+    button.addEventListener('click', () => selectColor(entry.value, background));
     $(background ? '#background-palette' : '#palette').append(button);
   }
 }
-document.querySelector('[data-ink]').classList.add('selected'); document.querySelector('[data-ink]').setAttribute('aria-pressed', true);
 // Keep the swatch palettes inside native disclosure controls for keyboard and touch use.
 for (const background of [false, true]) {
   const palette = $(background ? '#background-palette' : '#palette');
@@ -152,16 +179,11 @@ for (const background of [false, true]) {
     summary.querySelector('.selected-color-chip').style.background = value;
     summary.querySelector('.selected-color-name').textContent = selected.name.toLowerCase();
     summary.setAttribute('aria-label', `${background ? 'background' : 'color'}: ${selected.name.toLowerCase()}`);
-    for (const button of palette.querySelectorAll('.swatch')) {
-      const hex = button.dataset.background || button.dataset.ink;
-      const rgb = hex.slice(1).match(/../g).map(channel => parseInt(channel, 16));
-      button.style.setProperty('--check', rgb[0] * .299 + rgb[1] * .587 + rgb[2] * .114 < 140 ? '#FFFFFF' : '#343044');
-    }
   };
   palette.addEventListener('click', event => { if (!event.target.closest('button')) return; update(); picker.open = false; summary.focus(); });
   picker.addEventListener('toggle', () => { if (picker.open) for (const other of document.querySelectorAll('.color-picker')) if (other !== picker) other.open = false; });
   picker.addEventListener('keydown', event => { if (event.key === 'Escape') { picker.open = false; summary.focus(); } });
-  new MutationObserver(update).observe(palette, { subtree: true, attributes: true, attributeFilter: ['aria-pressed'] });
+  paletteViews.push(update);
   update();
 }
 document.addEventListener('click', event => { for (const picker of document.querySelectorAll('.color-picker')) if (!picker.contains(event.target)) picker.open = false; });
@@ -194,29 +216,24 @@ styleSection.before(shapeSection);
 for (const [select, options] of [[$('#brush-shape'), BRUSH_SHAPES], [$('#brush-style'), BRUSH_STYLES]]) {
   for (const value of options) select.add(new Option(value, value));
 }
-function selectShape(value) { brushShape = value; $('#brush-shape').value = value; updateEraserCursor(); syncFocusTools(); }
-function selectStyle(value) { brushStyle = value; $('#brush-style').value = value; syncFocusTools(); }
+function selectShape(value) { if (!BRUSH_SHAPES.includes(value)) return; brushShape = value; syncToolViews(); updateEraserCursor(); }
+function selectStyle(value) { if (!BRUSH_STYLES.includes(value)) return; brushStyle = value; syncToolViews(); }
 $('#brush-shape').onchange = event => selectShape(event.target.value);
 $('#brush-style').onchange = event => selectStyle(event.target.value);
 function selectSize(next) {
   if (!BRUSH_SIZES.includes(next)) return;
   size = next;
-  for (const other of document.querySelectorAll('[data-size]')) {
-    const selected = Number(other.dataset.size) === size;
-    other.classList.toggle('selected', selected); other.setAttribute('aria-pressed', selected);
-  }
-  syncFocusTools();
+  syncToolViews(); updateEraserCursor();
 }
 for (const b of document.querySelectorAll('[data-size]')) b.onclick = () => selectSize(Number(b.dataset.size));
 $('#undo').onclick = () => { if (ready && !active && history.undo()) changed(); };
 $('#redo').onclick = () => { if (ready && !active && history.redo()) changed(); };
 $('#clear').onclick = () => { if (!ready || active || !history.document.strokes.length) return; history.commit({ ...history.document, strokes: [] }); changed(); toast('Fresh canvas. Undo brings your drawing back.'); };
-function point(event) { const rect = canvas.getBoundingClientRect(); return [Math.max(0, Math.min(CANVAS_SIZE, (event.clientX - rect.left) / rect.width * CANVAS_SIZE)), Math.max(0, Math.min(CANVAS_SIZE, (event.clientY - rect.top) / rect.height * CANVAS_SIZE))]; }
 canvas.addEventListener('pointerdown', event => {
   if (!ready || active || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
   hideDraftStatus();
   event.preventDefault(); pointerId = event.pointerId; canvas.setPointerCapture(pointerId);
-  active = { tool, color, size, style: brushStyle, shape: brushShape, points: [point(event)] };
+  active = { tool, color, size, style: brushStyle, shape: brushShape, points: [canvasPoint(event, canvas.getBoundingClientRect(), CANVAS_SIZE)] };
   if (tool === 'brush' && brushStyle === 'pencil') active.seed = crypto.getRandomValues(new Uint32Array(1))[0];
   if (tool === 'brush' && brushStyle === 'spray') active.sprayVersion = 3;
   render();
@@ -224,11 +241,17 @@ canvas.addEventListener('pointerdown', event => {
 let frame = null;
 canvas.addEventListener('pointermove', event => {
   if (!active || event.pointerId !== pointerId) return;
-  const samples = event.getCoalescedEvents?.();
-  for (const e of samples?.length ? samples : [event]) { const p = point(e); const last = active.points.at(-1); if (Math.hypot(p[0]-last[0],p[1]-last[1]) > .5) active.points.push(p); }
+  appendPointerSamples(active.points, event, canvas.getBoundingClientRect(), CANVAS_SIZE);
   if (frame === null) frame = requestAnimationFrame(() => { frame = null; render(); });
 });
-function finish(event) { if (!active || event.pointerId !== pointerId) return; history.commit({ ...history.document, strokes: [...history.document.strokes, active] }); active = null; pointerId = null; changed(); }
+function finish(event) {
+  if (!active || event.pointerId !== pointerId) return;
+  // changed() paints the committed stroke immediately; a queued preview would
+  // otherwise repaint that same result on the next animation frame.
+  if (frame !== null) { cancelAnimationFrame(frame); frame = null; }
+  history.commit({ ...history.document, strokes: [...history.document.strokes, active] });
+  active = null; pointerId = null; changed();
+}
 canvas.addEventListener('pointerup', finish); canvas.addEventListener('pointercancel', finish); canvas.addEventListener('lostpointercapture', finish);
 document.addEventListener('keydown', event => {
   if (!ready || active || event.altKey || canvas.closest('[hidden]')) return;
@@ -271,7 +294,7 @@ export function setPromptDay(day) {
   dayQueue = dayQueue.catch(() => {}).then(async () => {
     await initialized;
     if (promptDay === day) return;
-    ready = false; $('.toolbox').inert = true; clearTimeout(saveTimer);
+    ready = false; $('.toolbox').inert = true; syncToolViews(); clearTimeout(saveTimer);
     if (active) { history.commit({ ...history.document, strokes: [...history.document.strokes, active] }); active = null; pointerId = null; }
     await persist();
     promptDay = day; history = new History(); strokeCache.invalidate(); cursorPoint = null;
@@ -370,9 +393,7 @@ for (const entry of COLORS) {
   swatch.setAttribute('aria-hidden', 'true');
   button.append(swatch, document.createTextNode(entry.name.toLowerCase()));
   button.onclick = () => {
-    const select = focusSelect(activeColorMenu);
-    select.value = entry.value;
-    select.dispatchEvent(new Event('change', { bubbles: true }));
+    selectColor(entry.value, activeColorMenu === 'background');
     colorMenu.close();
   };
   colorMenu.querySelector('.color-menu-options').append(button);
@@ -391,7 +412,7 @@ for (const name of ['color', 'background']) {
     activeColorMenu = name;
     colorMenu.querySelector('h2').textContent = name;
     for (const option of colorMenu.querySelectorAll('.color-menu-option')) {
-      option.setAttribute('aria-pressed', String(option.dataset.color === select.value));
+      option.setAttribute('aria-pressed', String(option.dataset.color === (name === 'background' ? history.document.background : color)));
     }
     colorMenu.showModal();
     colorMenu.querySelector('[aria-pressed="true"]')?.focus();
@@ -406,26 +427,40 @@ function syncFocusTools() {
   focusSelect('color').value = color;
   focusSelect('background').value = history.document.background;
   for (const name of ['color', 'background']) {
-    const select = focusSelect(name);
+    const value = name === 'background' ? history.document.background : color;
+    const label = COLORS.find(entry => entry.value === value).name.toLowerCase();
     const button = sharedTools.querySelector(`[data-color-menu="${name}"]`);
-    button.querySelector('.color-menu-swatch').style.backgroundColor = select.value;
-    button.querySelector('.color-menu-value').textContent = select.selectedOptions[0]?.textContent ?? '';
-    button.setAttribute('aria-label', `${name}: ${select.selectedOptions[0]?.textContent ?? ''}`);
+    button.querySelector('.color-menu-swatch').style.backgroundColor = value;
+    button.querySelector('.color-menu-value').textContent = label;
+    button.setAttribute('aria-label', `${name}: ${label}`);
     button.disabled = !ready;
   }
   for (const select of sharedTools.querySelectorAll('select')) select.disabled = !ready;
   focusSelect('style').disabled = !ready || tool === 'eraser';
   $('#brush-style').disabled = tool === 'eraser';
 }
-focusSelect('tool').onchange = event => { selectTool(event.target.value); syncFocusTools(); };
+focusSelect('tool').onchange = event => selectTool(event.target.value);
 focusSelect('size').onchange = event => { selectSize(Number(event.target.value)); };
 focusSelect('style').onchange = event => selectStyle(event.target.value);
 focusSelect('shape').onchange = event => selectShape(event.target.value);
-focusSelect('color').onchange = event => { document.querySelector(`[data-ink="${event.target.value}"]`).click(); syncFocusTools(); };
-focusSelect('background').onchange = event => { document.querySelector(`[data-background="${event.target.value}"]`).click(); syncFocusTools(); };
-new MutationObserver(syncFocusTools).observe($('.toolbox'), {
-  subtree: true, attributes: true, attributeFilter: ['aria-pressed', 'inert'],
-});
+focusSelect('color').onchange = event => selectColor(event.target.value);
+focusSelect('background').onchange = event => selectColor(event.target.value, true);
+syncToolViews = () => {
+  for (const id of ['brush', 'eraser']) {
+    $('#' + id).classList.toggle('selected', id === tool);
+    $('#' + id).setAttribute('aria-pressed', String(id === tool));
+  }
+  for (const button of document.querySelectorAll('[data-size], [data-ink]')) {
+    const selected = button.hasAttribute('data-size') ? Number(button.dataset.size) === size : button.dataset.ink === color;
+    button.classList.toggle('selected', selected); button.setAttribute('aria-pressed', String(selected));
+  }
+  $('#brush-shape').value = brushShape; $('#brush-style').value = brushStyle;
+  $('#color-name').textContent = COLORS.find(entry => entry.value === color).name;
+  $('#color-hex').textContent = color;
+  for (const update of paletteViews) update();
+  syncFocusTools();
+};
+syncToolViews();
 const canvasHome = document.createComment('canvas home');
 const historyHome = document.createComment('history home');
 const canvasFrame = $('#canvas-frame'), historyActions = $('.history-actions');

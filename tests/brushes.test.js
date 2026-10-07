@@ -1,9 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { BRUSH_SHAPES, BRUSH_STYLES, strokeSamples, sprayParticles, pencilParticles, insideShape, createBrushRenderer } from '../src/brushes.js';
+import { BRUSH_SHAPES, BRUSH_STYLES, strokeSamples, createStrokeSampler, sprayParticles, pencilParticles, insideShape, createBrushRenderer } from '../src/brushes.js';
 import { validDocument, restoreDraft, History } from '../src/model.js';
 
 const stroke = { tool: 'brush', color: '#343044', size: 14, points: [[20, 20], [100, 20]] };
+test('live sampling processes each segment once and matches complete-stroke sampling', () => {
+  const points = [[20,20], [20,20], [20.1,20.2], [100,70], [20,20], [300,140]];
+  for (const spacing of [.75, 1.68, 3.84]) {
+    const sample = createStrokeSampler(spacing), live = [], result = [];
+    for (const point of points) {
+      live.push(point);
+      result.push(...sample(live));
+      assert.deepEqual([...sample(live)], [], 'unchanged frames produce no new samples');
+    }
+    assert.deepEqual(result, [...strokeSamples(points, spacing)]);
+  }
+});
 test('pencil grain changes with each pass and stroke but survives draft reload', () => {
   const sample = { x: 30, y: 30, index: 0 };
   const first = pencilParticles(sample, 'circle', 14, 123);

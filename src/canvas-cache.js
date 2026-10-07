@@ -1,3 +1,29 @@
+import { createStrokeSampler } from './brushes.js';
+
+// Only seeded pencil deposits are independently cumulative. Other styles must
+// keep their single-fill semantics, including antialiased opaque edges.
+export function createActivePencilCache(context, size, draw) {
+  let current = null, base = null, samples = null;
+  return {
+    invalidate() { current = base = samples = null; },
+    sync(stroke, strokes, committedCanvas) {
+      const supported = stroke?.tool === 'brush' && stroke.shape !== undefined &&
+        stroke.style === 'pencil' && stroke.seed !== undefined;
+      if (!supported) { this.invalidate(); return false; }
+      if (current !== stroke || base !== strokes) {
+        this.invalidate();
+        context.clearRect(0, 0, size, size);
+        context.drawImage(committedCanvas, 0, 0);
+        samples = createStrokeSampler(Math.max(.75, stroke.size * .12));
+        current = stroke; base = strokes;
+      }
+      try { draw(context, stroke, samples(stroke.points)); }
+      catch (error) { this.invalidate(); throw error; }
+      return true;
+    },
+  };
+}
+
 // Completed strokes are immutable. Reuse their pixels while the document grows;
 // undo, clear, or a different history branch must replay the remaining strokes.
 export function createStrokeCache(context, size, drawStroke) {

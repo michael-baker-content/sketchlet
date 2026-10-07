@@ -1,7 +1,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createStrokeCache, watchCanvasRecovery } from '../src/canvas-cache.js';
+import { createStrokeCache, createActivePencilCache, watchCanvasRecovery } from '../src/canvas-cache.js';
 import { History } from '../src/model.js';
+
+test('active pencil reuses its base and rebuilds after invalidation or history changes', () => {
+  let copies = 0, count = 0;
+  const cache = createActivePencilCache({ clearRect() {}, drawImage() { copies++; } }, 1200,
+    (_, stroke, samples) => { count += [...samples].length; });
+  const stroke = { tool: 'brush', shape: 'circle', style: 'pencil', seed: 1, size: 5, points: [[0,0]] };
+  const base = [];
+  cache.sync(stroke, base, {});
+  stroke.points.push([30,0]); cache.sync(stroke, base, {});
+  assert.equal(count, 41);
+  cache.sync(stroke, base, {});
+  assert.equal(count, 41);
+  assert.equal(copies, 1);
+  cache.invalidate(); cache.sync(stroke, base, {});
+  assert.equal(count, 82);
+  cache.sync(stroke, [], {});
+  assert.equal(copies, 3);
+  for (const unsupported of [null, { ...stroke, tool: 'eraser' }, { ...stroke, style: 'marker' }, { ...stroke, seed: undefined }]) {
+    assert.equal(cache.sync(unsupported, base, {}), false);
+  }
+});
 
 function fixture() {
   const pixels = new Set(), painted = [];

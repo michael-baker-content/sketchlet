@@ -1,6 +1,6 @@
 # Deploy Sketchlet on Vercel
 
-Vercel serves `dist/` as static files and runs `api/index.js` as a Node.js function. Neon remains the database and object storage provider. No new storage service or authentication provider is needed.
+Vercel serves public assets from `dist/`, runs the application API through `api/index.js`, and renders public page metadata and social images through `api/pages.js`. Neon remains the database and object storage provider. No new storage service or authentication provider is needed.
 
 ## 1. Check locally
 
@@ -8,11 +8,11 @@ You control terminal commands and server processes. These commands do not deploy
 
 ```powershell
 npm run check
+npm run test:browser
 npm run build
-npm run db:migrate
 ```
 
-The migrations add shared rate limits and guest display-name profiles. Existing data is preserved. Run the migrations before deploying code that uses profiles. The build copies an explicit list of public files into `dist`; it does not load credentials, run migrations, or alter Neon. GitHub Actions repeats the checks and build on pushes and pull requests without database credentials.
+Run `npm run db:migrate` separately when a release adds database migrations or when setting up a new database. The drawing performance refactor needs no migrations, dependency installation, environment changes, or draft conversion. The build copies an explicit list of public files into `dist`; it does not load credentials, run migrations, or alter Neon. GitHub Actions repeats the checks and build on pushes and pull requests without database credentials.
 
 Social previews are rendered server-side for `/`, `/gallery`, `/gallery?date=YYYY-MM-DD`, and drawing links. They include Open Graph and `twitter:card=summary_large_image` metadata, plus a public 1200×630 PNG at `/social/site.png`, `/social/gallery.png`, `/social/prompt/<date>.png`, or `/social/drawing/<uuid>.png`. Crawlers do not receive a guest cookie or initialize the drawing editor. Set `APP_ORIGIN` when using a custom domain; the initial Vercel domain uses the production URL system variable. Preview images are generated from the private drawing object only when a crawler requests the drawing preview and are cached briefly at the edge.
 
@@ -77,7 +77,7 @@ Deploy after entering the variables. Updating environment settings later require
 
 ## Preview environments
 
-Start with credentials scoped to Production. Preview builds still load the drawing interface but cannot save until Preview environment credentials are configured. For working previews, create a separate Neon branch, migrate it, and use that branch's database **and storage** credentials in Vercel's Preview environment. Do not mix production database settings with preview storage. Keep Vercel deployment protection enabled for previews.
+Start with credentials scoped to Production. Without working Preview credentials, home cannot confirm submission status and shows a loading error rather than opening the editor. For working previews, create a separate Neon branch, migrate it, and use that branch's database **and storage** credentials in Vercel's Preview environment. Do not mix production database settings with preview storage. Keep Vercel deployment protection enabled for previews.
 
 ## 5. Check the deployed URL
 
@@ -98,6 +98,14 @@ Start with credentials scoped to Production. Preview builds still load the drawi
 Localhost and the hosted domain have different browser storage and guest cookies. Existing drawings in the same Neon database will be visible in the gallery, but the hosted browser will not automatically own drawings created as a localhost guest. Choose the long-term domain early; switching domains changes the guest identity again.
 
 ## Initial release limits
+
+### Drawing performance release checks
+
+The refactor retains the 1200×1200 canvas, 60-edit undo history, and existing draft format. Completed strokes are cached; seeded pencil strokes append new grain without an additional canvas buffer. Other brush styles preserve their existing single-fill behavior.
+
+After automated checks pass, use the affected phone to try layered pencil shading over a texture, a long regular-brush stroke, and erasing across overlapping strokes. Check that releasing a stroke, undo/redo, refreshing a saved draft, and switching normal/full-screen views preserve its appearance. Watch for disappearing strokes, altered pixels, or increasing input lag. Browser tests use simulated phone dimensions, not physical phone hardware, and operation counts are not frame-time benchmarks.
+
+### Remaining limits
 
 Page-loading regression checks: after the one-time Playwright setup documented in README, run `npm run test:browser`. These use mocked API traffic and require neither Neon nor a running local server. The page separation needs no database migration. `/gallery` and `/d/:id` are rendered through the public-page function with `gallery.html` as their client shell; `/` uses `index.html` and conditionally loads the editor only after an unfinished-day response.
 

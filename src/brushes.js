@@ -8,18 +8,29 @@ export const roughVertices = roughRadii.map((radius, index) => {
 
 // Samples follow distance, not pointer-event frequency or elapsed time.
 export function* strokeSamples(points, spacing) {
-  yield { x: points[0][0], y: points[0][1], distance: 0, index: 0 };
-  let next = spacing, traveled = 0, index = 1;
-  for (let i = 1; i < points.length; i++) {
-    const a = points[i - 1], b = points[i];
-    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    while (next <= traveled + length && length > 0) {
-      const fraction = (next - traveled) / length;
-      yield { x: a[0] + (b[0] - a[0]) * fraction, y: a[1] + (b[1] - a[1]) * fraction, distance: next, index: index++ };
-      next += spacing;
+  yield* createStrokeSampler(spacing)(points);
+}
+
+// An append-only cursor for a live gesture. Keep the same arithmetic and sample
+// indices as strokeSamples so grain remains identical after save/undo/reload.
+export function createStrokeSampler(spacing) {
+  let consumed = 0, next = spacing, traveled = 0, index = 1;
+  return function* samples(points) {
+    if (!consumed && points.length) {
+      consumed = 1;
+      yield { x: points[0][0], y: points[0][1], distance: 0, index: 0 };
     }
-    traveled += length;
-  }
+    for (; consumed < points.length; consumed++) {
+      const a = points[consumed - 1], b = points[consumed];
+      const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      while (next <= traveled + length && length > 0) {
+        const fraction = (next - traveled) / length;
+        yield { x: a[0] + (b[0] - a[0]) * fraction, y: a[1] + (b[1] - a[1]) * fraction, distance: next, index: index++ };
+        next += spacing;
+      }
+      traveled += length;
+    }
+  };
 }
 
 export function insideShape(shape, x, y) {
@@ -94,7 +105,7 @@ export function createBrushRenderer(makeCanvas) {
     }
     return pencilTextures.get(color);
   }
-  return function draw(context, stroke) {
+  return function draw(context, stroke, samples) {
     const erasing = stroke.tool === 'eraser';
     const style = erasing ? 'brush' : stroke.style;
     const lightSpray = style === 'spray' && stroke.sprayVersion === 3;
@@ -103,7 +114,7 @@ export function createBrushRenderer(makeCanvas) {
     context.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
     if (style === 'pencil' && stroke.seed !== undefined) {
       context.fillStyle = stroke.color;
-      for (const sample of strokeSamples(stroke.points, spacing)) {
+      for (const sample of samples ?? strokeSamples(stroke.points, spacing)) {
         context.save();
         context.beginPath();
         stamp(context, stroke.shape, sample.x, sample.y, stroke.size / 2);

@@ -73,6 +73,7 @@ Public page metadata is rendered server-side for social crawlers. Home, gallery,
 The main pieces are:
 
 - `src/studio.js`, `src/model.js`, and `src/brushes.js`: canvas, tools, undo, and draft storage.
+- `src/canvas-cache.js` and `src/pointer-input.js`: reuse rendered strokes and map batched pointer samples to canvas coordinates.
 - `index.html` and `src/home-page.js`: today's page; submission status is checked before loading an editor.
 - `gallery.html` and `src/gallery-page.js`: gallery and shared-drawing pages, independent of the editor and today's status request.
 - `src/editor.html` and `src/submission.js`: drawing markup and submission controls, loaded only for an unfinished day.
@@ -99,12 +100,14 @@ Maintenance uses Node.js 22.20 or newer. Local credentials belong in `.env.local
 | `npm ci` | install the locked dependencies |
 | `npm run dev` | start the local site at localhost:5173 |
 | `npm run check` | check JavaScript syntax and run tests |
-| `npm run test:browser` | check page loading and navigation in desktop and phone Chromium |
+| `npm run test:browser` | check page flows, tool synchronization, and drawing regression cases in desktop and phone Chromium |
 | `npm run build` | assemble the public files in `dist/` |
 | `npm run db:migrate` | apply database migrations when needed |
 
 Stop the existing local server before restarting after backend changes. Run checks and a build before pushing; Vercel builds from source and does not run migrations. Credentials and generated build output stay out of Git.
 
-The browser checks in `checks/browser/` serve the real page assets through Playwright and replace API responses with fixtures. They need no running server or database, and cannot submit drawings or votes to Neon. One-time setup: `npm install --save-dev @playwright/test`, then `npx playwright install chromium`. Run `npm run test:browser` afterward. Commit the dependency and lockfile updates from installation too.
+The browser checks in `checks/browser/` serve the real page assets through Playwright and replace API responses with fixtures. They need no running server or database, and cannot submit drawings or votes to Neon. Playwright is included in the locked dependencies; after `npm ci`, install its browser once with `npx playwright install chromium`. Each browser test runs in desktop and phone configurations, so its name appears twice.
+
+Drawing checks compare incremental pencil rendering against full replay pixel-for-pixel and verify reduced grain operations, pointer batching, and tool state across layouts. These guard correctness and repeated work; they do not measure real-phone responsiveness. See the [drawing release checks](docs/DEPLOYMENT.md#drawing-performance-release-checks) before assessing performance on a device.
 
 [Deployment and release checks](docs/DEPLOYMENT.md) · [Design direction](docs/DESIGN.md)

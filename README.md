@@ -17,7 +17,7 @@ When you're ready:
 - **save to gallery** publishes your drawing after a confirmation. You get one submission per day, and it's final once saved.
 - **download** keeps a PNG on your device. It doesn't publish anything or use your daily submission.
 
-Each published drawing has its own shareable link, where you can return to see its ratings. Drawing on consecutive days builds your participation streak.
+Each published drawing has its own shareable link, where you can return to see its ratings. Links include the prompt name and a compact identifier; use **copy link** beside the rating button to share one. **Share card** creates a retro PNG with your drawing, prompt, date, name, and a snapshot of its ratings. Preview it, copy the image, or download it when your browser does not support image copying. Cards are generated on your device and are not uploaded. Older UUID links still work. Drawing on consecutive days builds your participation streak.
 
 ## inside the pencil case
 
@@ -68,6 +68,8 @@ Sketchlet uses **HTML, CSS, and JavaScript**, with the Canvas API doing the draw
 
 The database enforces one drawing per guest per prompt and one editable vote per guest per drawing. Server-side checks block self-voting, and shared request limits help curb abuse. Without accounts, these are browser-based rules—not proof that each visitor is a different person.
 
+Public page metadata is rendered server-side for social crawlers. Home, gallery, prompt-gallery, and drawing URLs provide Open Graph and large-image X card tags; drawing cards use a generated 1200×630 image while the artwork remains in private object storage.
+
 The main pieces are:
 
 - `src/studio.js`, `src/model.js`, and `src/brushes.js`: canvas, tools, undo, and draft storage.
@@ -76,9 +78,10 @@ The main pieces are:
 - `src/editor.html` and `src/submission.js`: drawing markup and submission controls, loaded only for an unfinished day.
 - `src/gallery.js`: shared profile and community views, with page initialization explicitly called by each entry point.
 - `src/api-client.js` and `src/page-startup.js`: API requests and conditional home startup.
+- `backend/social.mjs`, `backend/social-data.mjs`, and `api/pages.js`: crawler-friendly page metadata and generated social preview images.
 - `src/styles/`: base styles, playful details, retro surfaces, and page layouts, loaded in that order.
 - `backend/` and `db/`: local server, API, validation, storage access, and database migrations.
-- `api/`, `scripts/`, and `vercel.json`: hosting, local development, and the public-file build.
+- `api/`, `scripts/`, and `vercel.json`: hosting, social-preview rendering, local development, and the public-file build.
 - `docs/`: design notes and deployment instructions.
 
 ## still on the sketchpad

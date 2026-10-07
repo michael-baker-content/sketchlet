@@ -1,6 +1,7 @@
 import { COLORS, BRUSH_SIZES, CANVAS_SIZE, createDocument, draftKey, restoreDraft, History } from './model.js';
 import { BRUSH_SHAPES, BRUSH_STYLES, createBrushRenderer, roughVertices } from './brushes.js';
 import { createStrokeCache, watchCanvasRecovery } from './canvas-cache.js';
+import { setCloseIcon } from './close-button.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#canvas');
@@ -306,7 +307,7 @@ const focusView = document.createElement('dialog');
 focusView.className = 'drawing-focus';
 focusView.setAttribute('aria-label', 'full screen drawing');
 focusView.innerHTML = `<div class="focus-info"><div class="focus-info-top"><p class="focus-date"><span class="focus-brand">sketchlet * </span><span class="focus-date-value"></span></p></div><h2 class="focus-prompt"></h2></div>
-  <div class="focus-actions"><div class="focus-history"></div><button class="web-button focus-close" aria-label="close full screen drawing"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m5 5 14 14M19 5 5 19"/></svg></button></div>
+  <div class="focus-actions"><div class="focus-history"></div><button class="web-button focus-close" aria-label="close full screen drawing"></button></div>
   <div class="focus-canvas"></div>
   <div class="focus-tools" aria-label="drawing tools">
     <label>tools<select data-focus="tool"><option value="brush">draw</option><option value="eraser">erase</option></select></label>
@@ -317,6 +318,7 @@ focusView.innerHTML = `<div class="focus-info"><div class="focus-info-top"><p cl
     <label>background<select data-focus="background"></select></label>
   </div>`;
 document.body.append(focusView);
+setCloseIcon(focusView.querySelector('.focus-close'));
 const sharedInfo = focusView.querySelector('.focus-info');
 const sharedTools = focusView.querySelector('.focus-tools');
 const normalInfo = document.createElement('div');
@@ -331,6 +333,7 @@ const launchHome = document.createComment('full screen button home');
 focusButton.before(launchHome);
 // Keep this aligned with the stacked studio breakpoint in src/styles/flow.css.
 const stackedLayout = window.matchMedia('(max-width:760px), (min-width:761px) and (max-width:1100px) and (orientation:portrait)');
+const unsupportedFocusLayout = window.matchMedia('(orientation:landscape) and (max-width:1100px)');
 function syncFocusInfo() {
   const date = $('.prompt-date')?.textContent.split(' · ')[0] ?? '';
   sharedInfo.querySelector('.focus-date-value').textContent = date;
@@ -352,6 +355,7 @@ colorMenu.className = 'color-menu';
 colorMenu.setAttribute('aria-labelledby', 'color-menu-title');
 colorMenu.innerHTML = '<div class="color-menu-heading"><h2 id="color-menu-title"></h2><button type="button" class="web-button" aria-label="close colors">×</button></div><div class="color-menu-options"></div>';
 document.body.append(colorMenu);
+setCloseIcon(colorMenu.querySelector('.color-menu-heading button'));
 let activeColorMenu = null;
 colorMenu.querySelector('.color-menu-heading button').onclick = () => colorMenu.close();
 colorMenu.addEventListener('click', event => { if (event.target === colorMenu) colorMenu.close(); });
@@ -469,6 +473,7 @@ window.visualViewport?.addEventListener('resize', sizeFocusView);
 window.visualViewport?.addEventListener('scroll', sizeFocusView);
 window.addEventListener('resize', sizeFocusView);
 focusButton.onclick = () => {
+  if (unsupportedFocusLayout.matches) return;
   focusScroll = window.scrollY;
   for (const picker of document.querySelectorAll('.color-picker')) picker.open = false;
   focusView.prepend(sharedInfo);
@@ -492,8 +497,20 @@ focusView.addEventListener('close', () => {
   document.body.style.removeProperty('top');
   arrangeNormalStudio();
   window.scrollTo(0, focusScroll);
-  focusButton.focus({ preventScroll: true });
+  (unsupportedFocusLayout.matches ? canvas : focusButton).focus({ preventScroll: true });
 });
+function syncFocusAvailability() {
+  focusButton.hidden = unsupportedFocusLayout.matches;
+  if (!unsupportedFocusLayout.matches) return;
+  if (focusView.open) {
+    if (colorMenu.open) colorMenu.close();
+    focusView.close();
+  } else if (document.activeElement === focusButton) {
+    canvas.focus({ preventScroll: true });
+  }
+}
+unsupportedFocusLayout.addEventListener('change', syncFocusAvailability);
+syncFocusAvailability();
 arrangeNormalStudio();
 
 let fitCheckFrame = null;

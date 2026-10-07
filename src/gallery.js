@@ -1,6 +1,7 @@
 import { api } from './api-client.js';
 import { easternDate, promptForDate, formatPromptDate } from './prompts.js';
 import { createRatingSkips } from './rating-session.js';
+import { drawingPath, drawingIdFromPath } from './drawing-links.js';
 
 export async function startPage({ page, today = null, editor = null }) {
 const $ = selector => document.querySelector(selector);
@@ -242,11 +243,37 @@ window.addEventListener('popstate', syncHeaderLinks);
 function route(path) { if(location.pathname+location.search!==path) window.history.pushState({},'',path); syncHeaderLinks(); }
 function home() { window.location.assign('/'); }
 function showDrawing(drawing) {
-  show(title(drawing.mine?'your drawing':drawing.prompt)+`<div class="submission-layout"><img class="finished-drawing" alt="${escape(drawing.prompt)}"><div class="submission-info"><h3>${escape(drawing.prompt)}</h3><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time></p><p class="rating-total">${escape(ratingText(drawing))}</p>${drawing.mine && today?`<div class="streak-box"><strong>${state.streak} ${state.streak===1?'day':'days'}</strong><span>drawing streak</span></div>`:''}<label class="share-label">drawing link<input class="share-link" readonly aria-label="drawing link"></label><p class="muted share-note"></p><button class="web-button primary" id="start-rating">rate drawings</button>${!drawing.mine && drawing.myVote?`<p>your rating: ${drawing.myVote} / 5</p>`:''}</div></div>`);
-  panel.querySelector('img').src=drawing.image; $('.share-link').value=new URL(drawing.url,location.origin).href;
+  show(title(drawing.mine?'your drawing':drawing.prompt)+`<div class="submission-layout"><img class="finished-drawing" alt="${escape(drawing.prompt)}"><div class="submission-info"><h3>${escape(drawing.prompt)}</h3><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time></p><p class="rating-total">${escape(ratingText(drawing))}</p>${drawing.mine && today?`<div class="streak-box"><strong>${state.streak} ${state.streak===1?'day':'days'}</strong><span>drawing streak</span></div>`:''}<div class="drawing-actions"><button class="web-button" id="copy-drawing-link" type="button">copy link</button><button class="web-button" id="share-drawing-card" type="button">share card</button><button class="web-button primary" id="start-rating">rate drawings</button></div><p class="muted share-status" id="share-status" role="status"></p>${!drawing.mine && drawing.myVote?`<p>your rating: ${drawing.myVote} / 5</p>`:''}</div></div>`);
+  panel.querySelector('img').src=drawing.image;
   panel.querySelector('.submission-info h3').insertAdjacentHTML('afterend', authorMarkup(drawing));
-  $('.share-link').onclick=event=>event.target.select();
-  $('.share-note').textContent=['localhost','127.0.0.1'].includes(location.hostname)?'this link works locally until sketchlet is hosted.':'copy this link to share your drawing.';
+  const copyButton = $('#copy-drawing-link'), shareStatus = $('#share-status');
+  const shareUrl = new URL(drawingPath(drawing.id, drawing.prompt), location.origin).href;
+  copyButton.onclick = async () => {
+    copyButton.disabled = true;
+    shareStatus.replaceChildren();
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      shareStatus.textContent = 'link copied!';
+    } catch {
+      shareStatus.textContent = 'copying was blocked. you can copy the address from this link: ';
+      const link = document.createElement('a');
+      link.href = shareUrl; link.textContent = 'drawing link';
+      shareStatus.append(link);
+    } finally { copyButton.disabled = false; }
+  };
+  const cardButton = $('#share-drawing-card');
+  cardButton.onclick = async () => {
+    cardButton.disabled = true;
+    try {
+      const { openShareCard } = await import('./share-card.js');
+      if (cardButton.isConnected) openShareCard(drawing, cardButton);
+    } catch {
+      if (cardButton.isConnected) shareStatus.textContent = 'could not open the share card. please try again.';
+    } finally { cardButton.disabled = false; }
+  };
+  if (location.pathname.startsWith('/d/')) {
+    window.history.replaceState({}, '', drawingPath(drawing.id, drawing.prompt) + location.search);
+  }
   wireHome();
   $('#start-rating').textContent = drawing.mine ? 'rate drawings' : drawing.myVote ? 'edit your rating' : 'rate this drawing';
   $('#start-rating').onclick=()=>startRating(drawing.mine ? null : drawing.id);
@@ -362,9 +389,10 @@ async function load() {
     return;
   }
   const params = new URLSearchParams(location.search);
-  const id = location.pathname.match(/^\/d\/([0-9a-f-]{36})$/)?.[1];
+  const id = drawingIdFromPath(location.pathname);
   showLoading(id ? 'drawing' : 'gallery');
   try {
+    if (location.pathname.startsWith('/d/') && !id) throw new Error('drawing not found');
     if (params.get('view') === 'rate') { await startRating(params.get('drawing')); return; }
     if (id) {
       const drawing = await viewApi('/api/drawings/' + id);

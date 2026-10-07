@@ -5,13 +5,21 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "functions": {
-    "api/index.js": { "maxDuration": 30 }
+    "api/index.js": { "maxDuration": 30 },
+    "api/pages.js": { "maxDuration": 30, "includeFiles": "{index.html,gallery.html}" }
   },
+  "redirects": [
+    { "source": "/index.html", "destination": "/", "permanent": true },
+    { "source": "/gallery.html", "destination": "/gallery", "permanent": true }
+  ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/index?__sketchlet_path=:path*" },
-    { "source": "/gallery", "destination": "/gallery.html" },
-    { "source": "/gallery/", "destination": "/gallery.html" },
-    { "source": "/d/:id", "destination": "/gallery.html" }
+    { "source": "/", "destination": "/api/pages?__page=/" },
+    { "source": "/gallery", "destination": "/api/pages?__page=/gallery" },
+    { "source": "/gallery/", "destination": "/api/pages?__page=/gallery" },
+    { "source": "/d/:id", "destination": "/api/pages?__page=/d/:id" },
+    { "source": "/social/:path*", "destination": "/api/pages?__page=/social/:path*" },
+    { "source": "/robots.txt", "destination": "/api/pages?__page=/robots.txt" }
   ],
   "headers": [
     {

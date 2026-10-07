@@ -47,12 +47,15 @@ test('published assets exist and their relative imports remain public',async()=>
     assert.ok(publicFile(match[1]),`index.html references unpublished ${match[1]}`);
   }
   for(const file of ['.env.local','.neon','backend/server.mjs','backend/api.mjs','docs/DESIGN.md','docs/DEPLOYMENT.md','scripts/correct-singing-kite.mjs','package-lock.json'])assert.equal(PUBLIC_FILES.includes(file),false);
+  assert.equal(PUBLIC_FILES.includes('backend/social.mjs'),false);
 });
 test('deployment publishes only dist and routes drawing URLs to the app',async()=>{
   const config=JSON.parse(await readFile(new URL('../vercel.json',import.meta.url),'utf8'));
   assert.equal(config.outputDirectory,'dist');
-  assert.ok(config.rewrites.some(rule=>rule.source==='/d/:id' && rule.destination==='/gallery.html'));
-  assert.ok(config.rewrites.some(rule=>rule.source==='/gallery' && rule.destination==='/gallery.html'));
+  assert.ok(config.rewrites.some(rule=>rule.source==='/d/:id' && rule.destination==='/api/pages?__page=/d/:id'));
+  assert.ok(config.rewrites.some(rule=>rule.source==='/gallery' && rule.destination==='/api/pages?__page=/gallery'));
+  assert.ok(config.rewrites.some(rule=>rule.source==='/' && rule.destination==='/api/pages?__page=/'));
+  assert.ok(config.functions['api/pages.js'].includeFiles.includes('index.html'));
   assert.equal(publicFile('/gallery'),'gallery.html');
   assert.equal(publicFile('/gallery/'),'gallery.html');
   assert.equal(publicFile('/gallery/private'),null);

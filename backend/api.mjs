@@ -4,6 +4,7 @@ import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } fro
 import sharp from 'sharp';
 import { easternDate, promptForDate } from '../src/prompts.js';
 import { CANVAS_SIZE } from '../src/model.js';
+import { drawingPath } from '../src/drawing-links.js';
 import { readJson as body, allowedOrigins } from './http.mjs';
 import { normalizeDisplayName, profileDrawingCursor } from './profile.mjs';
 import { requireRatingName, validateVote, networkLimitKey, parseSkipped, balanceRatingQueue } from './ratings.mjs';
@@ -36,7 +37,7 @@ async function today() {
   return record;
 }
 function publicDrawing(row, owner) {
-  return { id: row.id, date: row.day, prompt: row.title, displayName: row.display_name || '', image: `/api/drawings/${row.id}/image`, url: `/d/${row.id}`, mine: row.owner_hash === owner, average: row.average === null ? null : Number(row.average), count: Number(row.count || 0), myVote: row.my_vote ? Number(row.my_vote) : null };
+  return { id: row.id, date: row.day, prompt: row.title, displayName: row.display_name || '', image: `/api/drawings/${row.id}/image`, url: drawingPath(row.id, row.title), mine: row.owner_hash === owner, average: row.average === null ? null : Number(row.average), count: Number(row.count || 0), myVote: row.my_vote ? Number(row.my_vote) : null };
 }
 async function drawings(owner, day = null, id = null, queue = false) {
   return sql`SELECT d.id, d.prompt_day::text AS day, p.title, d.owner_hash, profile.display_name,

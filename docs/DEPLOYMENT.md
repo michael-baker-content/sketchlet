@@ -14,6 +14,8 @@ npm run db:migrate
 
 The migrations add shared rate limits and guest display-name profiles. Existing data is preserved. Run the migrations before deploying code that uses profiles. The build copies an explicit list of public files into `dist`; it does not load credentials, run migrations, or alter Neon. GitHub Actions repeats the checks and build on pushes and pull requests without database credentials.
 
+Social previews are rendered server-side for `/`, `/gallery`, `/gallery?date=YYYY-MM-DD`, and drawing links. They include Open Graph and `twitter:card=summary_large_image` metadata, plus a public 1200×630 PNG at `/social/site.png`, `/social/gallery.png`, `/social/prompt/<date>.png`, or `/social/drawing/<uuid>.png`. Crawlers do not receive a guest cookie or initialize the drawing editor. Set `APP_ORIGIN` when using a custom domain; the initial Vercel domain uses the production URL system variable. Preview images are generated from the private drawing object only when a crawler requests the drawing preview and are cached briefly at the edge.
+
 Display names are optional (up to 32 characters) and are cached in local storage. The database profile is associated with the existing guest cookie, and every drawing reads its current owner's name. Changing a name therefore updates attribution for earlier drawings too. Names are not unique login credentials and cannot claim another guest's drawings. Clearing the guest cookie or changing domains loses access to that guest identity even if the name is still cached locally.
 
 Run commands from the repository root. After backend changes, stop the running server with Ctrl+C and restart it with `npm run dev`. The local entry point is `backend/server.mjs`. The current profile drawing list, rating, and interface updates require no new migrations or environment variables. Run the checks and build against the latest source before pushing.
@@ -80,7 +82,9 @@ Start with credentials scoped to Production. Preview builds still load the drawi
 ## 5. Check the deployed URL
 
 - Today's prompt loads, drawing works, and save creates a gallery entry.
-- `/d/<drawing-id>` works when opened directly and refreshed.
+- Both legacy `/d/<uuid>` links and new `/d/<prompt-name>~<compact-id>` links work when opened directly and refreshed. Legacy links update to the readable address after loading. The compact ID preserves the full UUID; no database migration or short-link table is needed.
+- “Copy link” appears beside the rating action, copies the readable absolute URL, and announces success. Blocked clipboard access provides a fallback link. Check the action row at 320px.
+- “Share card” loads its generator only when requested. Check the preview, correct drawing/name/date/rating totals, image copy on HTTPS, PNG download, close/reopen, and retry after an image-load failure. No card is stored on the server. At narrow widths, the two share actions sit above the rating action.
 - Saved images load from the private bucket through the API.
 - Rating from another browser requires a saved name but no drawing submission. Self-voting remains blocked. Updating an existing rating changes its stars while keeping the vote count unchanged.
 - Refresh restores only the draft for the current prompt date.
@@ -95,7 +99,7 @@ Localhost and the hosted domain have different browser storage and guest cookies
 
 ## Initial release limits
 
-Page-loading regression checks: after the one-time Playwright setup documented in README, run `npm run test:browser`. These use mocked API traffic and require neither Neon nor a running local server. The page separation needs no database migration. `/gallery` and `/d/:id` now serve `gallery.html`; `/` serves `index.html` and conditionally loads the editor only after an unfinished-day response.
+Page-loading regression checks: after the one-time Playwright setup documented in README, run `npm run test:browser`. These use mocked API traffic and require neither Neon nor a running local server. The page separation needs no database migration. `/gallery` and `/d/:id` are rendered through the public-page function with `gallery.html` as their client shell; `/` uses `index.html` and conditionally loads the editor only after an unfinished-day response.
 
 - JSON uploads are capped at 4,000,000 bytes to leave room below Vercel's 4.5 MB function limit. Large drawings show a clear error without losing the local draft. A future direct-to-storage upload flow can remove this limit.
 - Postgres enforces 40 POST requests/queue loads per guest and 120 per client IP per minute across function instances. Network keys contain hashes rather than raw IP addresses. Vercel requests use its overwritten `x-forwarded-for` header; local requests use the socket. No new environment variables or migration are required for this rating update. Shared networks share this allowance. Vercel Firewall rules remain an additional deployment-level option, not configured by this change. Rate-limit records can be pruned periodically.

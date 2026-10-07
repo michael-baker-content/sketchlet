@@ -36,7 +36,7 @@ Use the drawing studio's current retro-web treatment throughout the application.
 5. Empty states for a new community and an exhausted rating queue.
 6. Archive browsing and individual drawing pages.
 7. Editable profile with a local-only photo and a paginated list of this browser's drawings.
-8. Full-screen drawing on phones and tablets; narrow screens use two tool columns, with swatches in color menus.
+8. Full-screen drawing on portrait phones and tablets; landscape requires at least 1101px width. Rotating into narrower landscape returns to normal view with the drawing and undo history preserved. Narrow screens use two tool columns, with swatches in color menus.
 9. Separate gallery submission and PNG download buttons above a contrasting rules footer in normal view.
 
 The home and gallery have separate document and JavaScript entry points. Home requests submission status before loading editor markup, code, or draft storage. Gallery and shared-drawing pages request their own data without initializing the editor or requesting today's status. Submission controls are loaded only alongside the editor. Shared community/profile rendering remains in `src/gallery.js`; further component extraction is separate work.

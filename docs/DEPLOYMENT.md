@@ -95,6 +95,8 @@ Localhost and the hosted domain have different browser storage and guest cookies
 
 ## Initial release limits
 
+Page-loading regression checks: after the one-time Playwright setup documented in README, run `npm run test:browser`. These use mocked API traffic and require neither Neon nor a running local server. The page separation needs no database migration. `/gallery` and `/d/:id` now serve `gallery.html`; `/` serves `index.html` and conditionally loads the editor only after an unfinished-day response.
+
 - JSON uploads are capped at 4,000,000 bytes to leave room below Vercel's 4.5 MB function limit. Large drawings show a clear error without losing the local draft. A future direct-to-storage upload flow can remove this limit.
 - Postgres enforces 40 POST requests/queue loads per guest and 120 per client IP per minute across function instances. Network keys contain hashes rather than raw IP addresses. Vercel requests use its overwritten `x-forwarded-for` header; local requests use the socket. No new environment variables or migration are required for this rating update. Shared networks share this allowance. Vercel Firewall rules remain an additional deployment-level option, not configured by this change. Rate-limit records can be pruned periodically.
 - Rating queue candidates are ranked across the full archive before a bounded batch is selected. Both current-day and archive candidates get low-count and favorite slots. Large galleries may eventually need cached aggregates or a dedicated queue; query cost still grows with the collection.

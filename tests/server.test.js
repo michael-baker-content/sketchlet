@@ -6,7 +6,7 @@ test('server denies credentials, source internals, and traversal',()=>{
   for(const path of ['/.env.local','/.env','/.neon','/.git/config','/server.mjs','/backend/server.mjs','/backend/api.mjs','/docs/DESIGN.md','/docs/DEPLOYMENT.md','/package-lock.json','/../.env.local','/src/../../.env.local']) assert.equal(publicFile(path),null,path);
   assert.equal(publicFile('/'),'index.html');
   assert.equal(publicFile('/src/gallery.js'),'src/gallery.js');
-  assert.equal(publicFile('/d/12345678-1234-1234-1234-123456789abc'),'index.html');
+  assert.equal(publicFile('/d/12345678-1234-1234-1234-123456789abc'),'gallery.html');
 });
 test('prompt date changes at Eastern midnight including daylight saving',()=>{
   assert.equal(easternDate(new Date('2026-10-03T03:59:59Z')),'2026-10-02');

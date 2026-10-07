@@ -1,13 +1,22 @@
+import { api } from './api-client.js';
 import { easternDate, promptForDate, formatPromptDate } from './prompts.js';
-import { setPromptDay, captureDraft } from './studio.js';
-import { submissionFits } from './upload-limits.js';
 import { createRatingSkips } from './rating-session.js';
 
+export async function startPage({ page, today = null, editor = null }) {
 const $ = selector => document.querySelector(selector);
 const main = $('main'), studio = $('.studio'), intro = $('.intro');
+let editorUI = null;
+const panel = $('#page-content');
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let state = { date: easternDate(), prompt: promptForDate(easternDate()), submission: null, streak: 0 };
-let connected = false, queue = [], queueIndex = 0, viewGeneration = 0, reviewedDraft = null;
+let state = today || { date: easternDate(), prompt: promptForDate(easternDate()), submission: null, streak: 0 };
+const connected = !!today;
+let queue = [], queueIndex = 0, viewGeneration = 0;
+let viewController = null;
+function beginView() { viewController?.abort(); viewController = new AbortController(); return ++viewGeneration; }
+function viewApi(path) { return api(path, undefined, { signal: viewController.signal }); }
+window.addEventListener('pagehide', () => { beginView(); });
+// A restored document may contain a canceled loading view or yesterday's status.
+window.addEventListener('pageshow', event => { if (event.persisted) window.location.reload(); });
 let ratingStorage;
 try { ratingStorage = sessionStorage; } catch {}
 const ratingSkips = createRatingSkips(ratingStorage);
@@ -29,30 +38,8 @@ async function saveName(value) {
   if (state.submission) state.submission.displayName = displayName;
   document.querySelectorAll('[data-own-author]').forEach(element => { element.textContent = `by ${displayName || 'anonymous'}`; });
 }
-const notice = document.createElement('div'); notice.className = 'preview-notice'; notice.setAttribute('role','status'); notice.textContent = 'connecting to the gallery…'; main.prepend(notice);
-intro.innerHTML = '<div class="daily-heading"><div><p class="prompt-date"></p><h1></h1></div></div>';
-const bar = document.createElement('div'); bar.className='submit-bar'; bar.innerHTML='<div class="submit-actions"><div class="save-buttons"><button class="web-button primary" id="review-drawing" disabled>save to gallery</button></div></div><footer class="drawing-footer">one drawing per day · final once saved<br>new prompt at midnight eastern</footer>'; studio.after(bar);
-bar.querySelector('.submit-actions').append($('#save-status'));
-// Keep the studio's existing PNG export handler when moving the download button.
-const downloadButton = $('#download');
-downloadButton.className = 'web-button';
-downloadButton.textContent = 'download';
-downloadButton.setAttribute('aria-label', 'download drawing as PNG');
-downloadButton.hidden = false;
-downloadButton.disabled = true;
-bar.querySelector('.save-buttons').append(downloadButton);
-$('.download-note').hidden = true;
-const panel = document.createElement('section'); panel.className='flow-panel'; panel.hidden=true; main.append(panel);
-const dialog = document.createElement('dialog'); dialog.className='submission-dialog';
-dialog.innerHTML='<form method="dialog"><h2>save to the gallery?</h2><p>your drawing will be visible to others and final for this prompt.</p><img alt="your drawing before submission"><p id="submission-error" role="alert"></p><div class="dialog-actions"><button class="web-button" value="cancel">keep drawing</button><button class="web-button primary" id="confirm-submit" type="button">save to gallery</button></div></form>';
-document.body.append(dialog);
-dialog.querySelector('[value="cancel"]').type = 'button';
-dialog.querySelector('[value="cancel"]').onclick = () => { if (!saving) dialog.close(); };
-$('#confirm-submit').type = 'submit';
-const submissionName = document.createElement('label');
-submissionName.className = 'name-field';
-submissionName.innerHTML = 'your name (optional)<input id="submission-name" maxlength="32" autocomplete="nickname" aria-describedby="submission-name-note"><small id="submission-name-note">shown on all your drawings, including earlier ones.</small>';
-dialog.querySelector('img').after(submissionName);
+const notice = document.createElement('div'); notice.className = 'preview-notice'; notice.setAttribute('role','status'); notice.textContent = 'connecting to the gallery…'; notice.hidden=true; main.prepend(notice);
+if (intro) intro.innerHTML = '<div class="daily-heading"><div><p class="prompt-date"></p><h1></h1></div></div>';
 const nameButton = document.createElement('button');
 nameButton.className = 'name-nav'; nameButton.textContent = 'profile';
 nameButton.setAttribute('aria-haspopup', 'dialog');
@@ -146,7 +133,12 @@ function openProfile(forRating = false) {
   if (!forRating) loadProfileDrawings();
 }
 nameButton.onclick = () => openProfile();
-nameDialog.addEventListener('close', () => { photoRevision++; processingPhoto = false; $('#save-name').disabled = false; pendingRating = null; });
+nameDialog.addEventListener('close', () => {
+  photoRevision++; processingPhoto = false; $('#save-name').disabled = false;
+  const canceledRating = pendingRating;
+  pendingRating = null;
+  if (canceledRating?.generation === viewGeneration) openArchive();
+});
 nameDialog.addEventListener('close', () => { profileDrawingsRevision++; });
 $('#remove-profile-photo').onclick = () => {
   photoRevision++; processingPhoto = false; pendingPhoto = '';
@@ -210,36 +202,33 @@ nameDialog.querySelector('form').addEventListener('submit', async event => {
   finally { savingName = false; controls.forEach(control => { control.disabled = false; }); }
 });
 function header() {
+  if (!intro) return;
   $('.prompt-date').textContent=formatPromptDate(state.date);
   $('.daily-heading h1').textContent=`"${state.prompt}"`;
-  $('.studio-title').textContent=`today's prompt: "${state.prompt}"`;
+  if ($('.studio-title')) $('.studio-title').textContent=`today's prompt: "${state.prompt}"`;
 }
 async function adoptDay(next) {
   const changed = next.date !== state.date;
-  $('#review-drawing').disabled = true;
-  await setPromptDay(next.date);
+  if (editor && !next.submission) await editor.setPromptDay(next.date);
   state = next; header();
   if (typeof next.displayName === 'string') rememberName(next.displayName);
-  $('#review-drawing').disabled = !connected;
-  if (changed) {
-    reviewedDraft = null;
-    if (dialog.open && !saving) dialog.close();
-    notice.hidden = false;
-    notice.textContent = 'new prompt, fresh canvas. your previous draft is kept separately on this device.';
-  }
+  if (editorUI) $('#review-drawing').disabled = !connected;
+  if (changed) editorUI?.dayChanged();
   return changed;
 }
 header();
-async function api(path, data) {
-  const response = await fetch(path, { credentials:'same-origin', headers:data ? {'Content-Type':'application/json'} : {}, method:data ? 'POST' : 'GET', body:data ? JSON.stringify(data) : undefined });
-  const result = await response.json().catch(()=>({error:response.status===413?'drawing is too large to upload. your draft is still saved.':'the gallery is unavailable. your draft is safe.'}));
-  if (!response.ok) throw Object.assign(new Error(result.error || 'the gallery is unavailable'), { code: result.code, status: response.status });
-  return result;
-}
-function show(content) { intro.hidden=location.pathname.replace(/\/$/,'')==='/gallery'; studio.hidden=true; bar.hidden=true; panel.hidden=false; panel.innerHTML=content; const heading=panel.querySelector('h2'); if(heading){document.title=`${heading.textContent} — sketchlet`;heading.tabIndex=-1;heading.focus();} }
+function show(content) { if(intro) intro.hidden=page==='gallery'; hideEditor(); panel.hidden=false; panel.innerHTML=content; const heading=panel.querySelector('h2'); if(heading){document.title=`${heading.textContent} — sketchlet`;heading.tabIndex=-1;heading.focus();} }
 function title(text, back = location.pathname.replace(/\/$/,'') === '/gallery' ? 'gallery' : 'home') { return `<div class="panel-title"><h2>${escape(text)}</h2><button class="web-button" id="back-home" data-return="${back}">${back === 'gallery' ? 'back to gallery' : 'back to today'}</button></div>`; }
-function wireHome() { const button=$('#back-home'); button.onclick=button.dataset.return==='gallery'?()=>{route('/gallery');openArchive();}:home; }
+function wireHome() { const button=$('#back-home'); button.onclick=button.dataset.return==='gallery'?()=>{openArchive();}:home; }
 function errorScreen(error) { show(title('could not load')+`<div class="empty-state"><p>${escape(error.message)}</p></div>`); wireHome(); }
+function showLoading(label) {
+  if (intro) intro.hidden = true;
+  hideEditor();
+  panel.hidden = false;
+  panel.innerHTML = `<div class="panel-title"><h2>${escape(label)}</h2></div><div class="empty-state" role="status">loading…</div>`;
+  document.title = `${label} — sketchlet`;
+}
+function hideEditor() { if (studio) studio.hidden=true; if (editorUI) editorUI.bar.hidden=true; }
 function ratingText(drawing) { return drawing.count ? `${drawing.average.toFixed(1)} stars · ${drawing.count} ${drawing.count===1?'rating':'ratings'}` : 'no ratings yet'; }
 function syncHeaderLinks() {
   const galleryPage = location.pathname.startsWith('/gallery') || location.pathname.startsWith('/d/') || ['gallery', 'rate'].includes(new URLSearchParams(location.search).get('view'));
@@ -251,15 +240,9 @@ function syncHeaderLinks() {
 syncHeaderLinks();
 window.addEventListener('popstate', syncHeaderLinks);
 function route(path) { if(location.pathname+location.search!==path) window.history.pushState({},'',path); syncHeaderLinks(); }
-async function home() {
-  const generation=++viewGeneration; route('/');
-  intro.hidden=false;document.title='sketchlet — drawing studio';
-  if (connected) { try { const latest=await api('/api/today'); if(generation!==viewGeneration)return; await adoptDay(latest); } catch(error) { notice.hidden=false;notice.textContent=error.message; } }
-  if(state.submission){showDrawing(state.submission);return;}
-  panel.hidden=true;studio.hidden=false;bar.hidden=false;$('#review-drawing').disabled=!connected;
-}
+function home() { window.location.assign('/'); }
 function showDrawing(drawing) {
-  show(title(drawing.mine?'your drawing':drawing.prompt)+`<div class="submission-layout"><img class="finished-drawing" alt="${escape(drawing.prompt)}"><div class="submission-info"><h3>${escape(drawing.prompt)}</h3><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time></p><p class="rating-total">${escape(ratingText(drawing))}</p>${drawing.mine?`<div class="streak-box"><strong>${state.streak} ${state.streak===1?'day':'days'}</strong><span>drawing streak</span></div>`:''}<label class="share-label">drawing link<input class="share-link" readonly aria-label="drawing link"></label><p class="muted share-note"></p><button class="web-button primary" id="start-rating">rate drawings</button>${!drawing.mine && drawing.myVote?`<p>your rating: ${drawing.myVote} / 5</p>`:''}</div></div>`);
+  show(title(drawing.mine?'your drawing':drawing.prompt)+`<div class="submission-layout"><img class="finished-drawing" alt="${escape(drawing.prompt)}"><div class="submission-info"><h3>${escape(drawing.prompt)}</h3><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time></p><p class="rating-total">${escape(ratingText(drawing))}</p>${drawing.mine && today?`<div class="streak-box"><strong>${state.streak} ${state.streak===1?'day':'days'}</strong><span>drawing streak</span></div>`:''}<label class="share-label">drawing link<input class="share-link" readonly aria-label="drawing link"></label><p class="muted share-note"></p><button class="web-button primary" id="start-rating">rate drawings</button>${!drawing.mine && drawing.myVote?`<p>your rating: ${drawing.myVote} / 5</p>`:''}</div></div>`);
   panel.querySelector('img').src=drawing.image; $('.share-link').value=new URL(drawing.url,location.origin).href;
   panel.querySelector('.submission-info h3').insertAdjacentHTML('afterend', authorMarkup(drawing));
   $('.share-link').onclick=event=>event.target.select();
@@ -269,47 +252,14 @@ function showDrawing(drawing) {
   $('#start-rating').onclick=()=>startRating(drawing.mine ? null : drawing.id);
   // Rating is available independently of submitting a drawing.
 }
-$('#review-drawing').onclick=async()=>{
-  $('#review-drawing').disabled=true;
-  try {
-    const next=await api('/api/today');
-    if(await adoptDay(next)) { await home(); return; }
-    if(state.submission){showDrawing(state.submission);return;}
-    reviewedDraft=captureDraft(state.date);
-    if(!submissionFits(reviewedDraft))throw new Error('drawing is too large to upload. your draft is still saved on this device.');
-    dialog.querySelector('img').src=reviewedDraft.image;
-    $('#submission-error').textContent='';
-    dialog.querySelector('h2').textContent=`save “${state.prompt}”?`;
-    $('#submission-name').value=displayName;
-    dialog.showModal();
-  } catch(error){notice.hidden=false;notice.textContent=error.message;}
-  finally{$('#review-drawing').disabled=!connected;}
-};
-let saving=false;
-dialog.addEventListener('cancel',event=>{if(saving)event.preventDefault();});
-dialog.querySelector('form').onsubmit=async event=>{
-  event.preventDefault();
-  if(saving || !reviewedDraft)return;saving=true;
-  const submittedDraft=reviewedDraft;
-  const submittedName=$('#submission-name').value;
-  $('#submission-name').disabled=true;
-  const buttons=dialog.querySelectorAll('button');buttons.forEach(button=>button.disabled=true);$('#confirm-submit').textContent='saving…';
-  try {
-    const next=await api('/api/today');
-    if(next.date!==submittedDraft.date){await adoptDay(next);dialog.close();await home();return;}
-    await saveName(submittedName);
-    // Keep the snapshot's original date; never relabel it using mutable page state.
-    const drawing=await api('/api/drawings',submittedDraft);
-    state.submission=drawing;state.streak=Math.max(1,state.streak+1);
-    try { await adoptDay(await api('/api/today')); } catch {}
-    dialog.close();route(drawing.url);showDrawing(drawing);
-  } catch(error){$('#submission-error').textContent=error.message;}
-  finally{saving=false;buttons.forEach(button=>button.disabled=false);$('#submission-name').disabled=false;$('#confirm-submit').textContent='save to gallery';}
-};
 async function startRating(drawingId = null){
-  const generation=++viewGeneration;
+  if (page === 'home') {
+    window.location.assign(drawingId ? '/gallery?view=rate&drawing=' + encodeURIComponent(drawingId) : '/gallery?view=rate');
+    return;
+  }
+  const generation=beginView();
   try {
-    const profile = await api('/api/profile');
+    const profile = await viewApi('/api/profile');
     if(generation!==viewGeneration)return;
     if (!profile.displayName?.trim()) {
       pendingRating={generation,run:()=>startRating(drawingId)};
@@ -317,7 +267,7 @@ async function startRating(drawingId = null){
     }
     rememberName(profile.displayName);
     route(drawingId ? `/gallery?view=rate&drawing=${encodeURIComponent(drawingId)}` : '/gallery?view=rate');
-    const result = drawingId ? [await api(`/api/drawings/${encodeURIComponent(drawingId)}`)] : await api(`/api/queue?skip=${encodeURIComponent(ratingSkips.ids().join(','))}`);
+    const result = drawingId ? [await viewApi(`/api/drawings/${encodeURIComponent(drawingId)}`)] : await viewApi(`/api/queue?skip=${encodeURIComponent(ratingSkips.ids().join(','))}`);
     if(generation!==viewGeneration)return;
     if(drawingId && result[0].mine){route(result[0].url);showDrawing(result[0]);return;}
     directRating=!!drawingId;queue=result;queueIndex=0;renderRating();
@@ -370,9 +320,12 @@ function renderRating(){
   };
 }
 async function openArchive(){
-  const generation=++viewGeneration;
+  if (page === 'home') { window.location.assign('/gallery'); return; }
+  route('/gallery');
+  const generation=beginView();
+  showLoading('gallery');
   try{
-    const days=await api('/api/archive');if(generation!==viewGeneration)return;
+    const days=await viewApi('/api/archive');if(generation!==viewGeneration)return;
     show(title('gallery','home')+`<div class="gallery-actions"><button class="web-button primary" id="gallery-rate">rate drawings</button></div><div class="archive-grid">${days.length?days.map(day=>`<button class="archive-card prompt-card" data-date="${escape(day.date)}"><img src="${escape(day.image)}" alt="drawing for ${escape(day.prompt)}" loading="lazy" decoding="async"><span>${escape(day.prompt)}</span><small><time class="display-date">${escape(formatPromptDate(day.date))}</time> · ${day.count} drawings</small></button>`).join(''):'<p>no drawings yet. yours could be the first.</p>'}</div>`);wireHome();
     $('#gallery-rate').onclick=()=>startRating();
     panel.querySelectorAll('[data-date]').forEach(button=>button.onclick=()=>gallery(button.dataset.date));
@@ -382,57 +335,74 @@ $('#open-archive').onclick=event=>{
   if(event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)return;
   event.preventDefault();route('/gallery');openArchive();
 };
-$('#open-home').onclick=event=>{
-  if(event.ctrlKey || event.metaKey || event.shiftKey || event.altKey)return;
-  event.preventDefault();home();
-};
+
 async function gallery(day){
   route(`/gallery?date=${encodeURIComponent(day)}`);
-  const generation=++viewGeneration;
+  const generation=beginView();
+  showLoading('gallery');
   try{
-    const items=await api(`/api/gallery?date=${encodeURIComponent(day)}`);if(generation!==viewGeneration)return;
+    const items=await viewApi(`/api/gallery?date=${encodeURIComponent(day)}`);if(generation!==viewGeneration)return;
     show(title(items[0]?.prompt||'gallery')+`<div class="archive-grid">${items.map(d=>`<button class="archive-card" data-id="${escape(d.id)}"><img src="${escape(d.image)}" alt="${escape(d.prompt)}"><span>${d.mine?'your drawing':'view drawing'}</span><small>${escape(ratingText(d))}</small></button>`).join('')||'<p>no drawings for this prompt yet.</p>'}</div>`);wireHome();
     panel.querySelectorAll('[data-id]').forEach(card => {
       const drawing = items.find(item => item.id === card.dataset.id);
       card.querySelector('small').insertAdjacentHTML('afterbegin', authorMarkup(drawing));
     });
-    panel.querySelectorAll('[data-id]').forEach(button=>button.onclick=()=>{viewGeneration++;const drawing=items.find(d=>d.id===button.dataset.id);route(drawing.url);showDrawing(drawing);});
+    panel.querySelectorAll('[data-id]').forEach(button=>button.onclick=()=>{beginView();const drawing=items.find(d=>d.id===button.dataset.id);route(drawing.url);showDrawing(drawing);});
   }catch(error){if(generation===viewGeneration)errorScreen(error);}
 }
-async function load(){
-  const generation=++viewGeneration;
-  intro.hidden=location.pathname.replace(/\/$/,'')==='/gallery' || ['gallery','rate'].includes(new URLSearchParams(location.search).get('view'));
-  try{
-    const next=await api('/api/today');if(generation!==viewGeneration)return;connected=true;notice.hidden=true;await adoptDay(next);
-    const params = new URLSearchParams(location.search);
-    if(params.get('view')==='gallery'){window.history.replaceState({},'', '/gallery');await openArchive();return;}
-    if(params.get('view')==='rate'){
-      if(location.pathname==='/')window.history.replaceState({},'', `/gallery${location.search}`);
-      await startRating(params.get('drawing'));return;
-    }
-    if(location.pathname.replace(/\/$/,'')==='/gallery'){
-      if(params.has('date'))await gallery(params.get('date'));else await openArchive();return;
-    }
-    const id=location.pathname.match(/^\/d\/([0-9a-f-]{36})$/)?.[1];
-    if(id){const drawing=await api(`/api/drawings/${id}`);if(generation===viewGeneration)showDrawing(drawing);}else if(state.submission)showDrawing(state.submission);
-  }catch(error){if(generation!==viewGeneration)return;notice.hidden=false;notice.textContent=error.message;}
+async function load() {
+  const generation = beginView();
+  if (page === 'home') {
+    await adoptDay(today);
+    if (generation !== viewGeneration) return;
+    if (state.submission) { showDrawing(state.submission); return; }
+    if (!editor) throw new Error('drawing tools are unavailable. please reload.');
+    intro.hidden=false; panel.hidden=true; studio.hidden=false; editorUI.bar.hidden=false;
+    document.title='sketchlet — drawing studio';
+    return;
+  }
+  const params = new URLSearchParams(location.search);
+  const id = location.pathname.match(/^\/d\/([0-9a-f-]{36})$/)?.[1];
+  showLoading(id ? 'drawing' : 'gallery');
+  try {
+    if (params.get('view') === 'rate') { await startRating(params.get('drawing')); return; }
+    if (id) {
+      const drawing = await viewApi('/api/drawings/' + id);
+      if (generation === viewGeneration) showDrawing(drawing);
+    } else if (params.has('date')) await gallery(params.get('date'));
+    else await openArchive();
+  } catch (error) { if (generation === viewGeneration) errorScreen(error); }
 }
-window.addEventListener('popstate',()=>{if(location.pathname==='/' && !location.search)home();else load();});
-let checkingDay=false;
-async function checkDay(force=false){
-  if(!connected || saving || checkingDay || document.hidden || (!force && easternDate()===state.date))return;
-  checkingDay=true;
-  try{
-    const next=await api('/api/today');
-    if(next.date!==state.date){
-      const wasDrawing=!studio.hidden || dialog.open;
-      await adoptDay(next);
-      if(wasDrawing){route('/');if(state.submission)showDrawing(state.submission);else{panel.hidden=true;studio.hidden=false;bar.hidden=false;}}
-    }
-  }catch{/* Recheck before submission; never relabel the existing draft on failure. */}
-  finally{checkingDay=false;}
+window.addEventListener('popstate', () => { load().catch(errorScreen); });
+if (editor) {
+  const { createSubmissionControls } = await import('./submission.js');
+  editorUI = createSubmissionControls({
+    studio, editor, getState: () => state, isConnected: () => connected,
+    getDisplayName: () => displayName, saveName, adoptDay, home, showDrawing, notice, api,
+    revision: () => viewGeneration, isCurrent: value => value === viewGeneration,
+  });
 }
-setInterval(()=>checkDay(),15000);
-window.addEventListener('focus',()=>checkDay(true));
-document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkDay(true);});
-load();
+if (typeof today?.displayName === 'string') rememberName(today.displayName);
+if (page === 'home') {
+  let checkingDay = false;
+  async function checkDay(force = false) {
+    if (editorUI?.saving || checkingDay || document.hidden || (!force && easternDate() === state.date)) return;
+    checkingDay = true;
+    try {
+      const next = await api('/api/today');
+      // A new day or a submission from another tab changes which home page is needed.
+      if (next.date !== state.date && editor && !next.submission) {
+        // Preserve/finish the old day's draft before changing its canvas.
+        await adoptDay(next);
+      } else if (next.date !== state.date || next.submission?.id !== state.submission?.id) {
+        window.location.reload();
+      }
+    } catch { /* Submission independently checks the server date. */ }
+    finally { checkingDay = false; }
+  }
+  setInterval(() => checkDay(), 15000);
+  window.addEventListener('focus', () => checkDay(true));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDay(true); });
+}
+await load();
+}

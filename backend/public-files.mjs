@@ -1,7 +1,8 @@
-export const PUBLIC_FILES = ['index.html', 'src/styles/base.css', 'src/styles/playful.css', 'src/styles/retro.css', 'src/styles/flow.css', 'src/studio.js', 'src/model.js', 'src/brushes.js', 'src/canvas-cache.js', 'src/gallery.js', 'src/rating-session.js', 'src/prompts.js', 'src/upload-limits.js'];
+export const PUBLIC_FILES = ['index.html', 'gallery.html', 'src/editor.html', 'src/home-page.js', 'src/gallery-page.js', 'src/page-startup.js', 'src/api-client.js', 'src/submission.js', 'src/styles/base.css', 'src/styles/playful.css', 'src/styles/retro.css', 'src/styles/flow.css', 'src/studio.js', 'src/model.js', 'src/brushes.js', 'src/canvas-cache.js', 'src/gallery.js', 'src/rating-session.js', 'src/prompts.js', 'src/upload-limits.js'];
 const files = new Set(PUBLIC_FILES);
 export function publicFile(pathname) {
-  if (pathname === '/' || pathname === '/gallery' || pathname === '/gallery/' || /^\/d\/[0-9a-f-]{36}$/.test(pathname)) return 'index.html';
+  if (pathname === '/') return 'index.html';
+  if (pathname === '/gallery' || pathname === '/gallery/' || /^\/d\/[0-9a-f-]{36}$/.test(pathname)) return 'gallery.html';
   const candidate = pathname.slice(1);
   return files.has(candidate) ? candidate : null;
 }

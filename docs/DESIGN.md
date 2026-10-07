@@ -39,7 +39,9 @@ Use the drawing studio's current retro-web treatment throughout the application.
 8. Full-screen drawing on phones and tablets; narrow screens use two tool columns, with swatches in color menus.
 9. Separate gallery submission and PNG download buttons above a contrasting rules footer in normal view.
 
-`src/gallery.js` is the connected entry point. Gallery submission is the primary action and PNG download is an optional local export. Keep previous local drafts and preview records intact. No sample votes or drawings are migrated automatically. Follow [README](../README.md) and [DEPLOYMENT.md](DEPLOYMENT.md) for setup and release verification.
+The home and gallery have separate document and JavaScript entry points. Home requests submission status before loading editor markup, code, or draft storage. Gallery and shared-drawing pages request their own data without initializing the editor or requesting today's status. Submission controls are loaded only alongside the editor. Shared community/profile rendering remains in `src/gallery.js`; further component extraction is separate work.
+
+Gallery submission is the primary action and PNG download is an optional local export. Keep previous local drafts and preview records intact. No sample votes or drawings are migrated automatically. Follow [README](../README.md) and [DEPLOYMENT.md](DEPLOYMENT.md) for setup and release verification.
 
 ## Working agreement
 

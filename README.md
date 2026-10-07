@@ -71,7 +71,11 @@ The database enforces one drawing per guest per prompt and one editable vote per
 The main pieces are:
 
 - `src/studio.js`, `src/model.js`, and `src/brushes.js`: canvas, tools, undo, and draft storage.
-- `src/gallery.js`: daily prompts, submissions, profiles, galleries, and rating screens.
+- `index.html` and `src/home-page.js`: today's page; submission status is checked before loading an editor.
+- `gallery.html` and `src/gallery-page.js`: gallery and shared-drawing pages, independent of the editor and today's status request.
+- `src/editor.html` and `src/submission.js`: drawing markup and submission controls, loaded only for an unfinished day.
+- `src/gallery.js`: shared profile and community views, with page initialization explicitly called by each entry point.
+- `src/api-client.js` and `src/page-startup.js`: API requests and conditional home startup.
 - `src/styles/`: base styles, playful details, retro surfaces, and page layouts, loaded in that order.
 - `backend/` and `db/`: local server, API, validation, storage access, and database migrations.
 - `api/`, `scripts/`, and `vercel.json`: hosting, local development, and the public-file build.
@@ -92,9 +96,12 @@ Maintenance uses Node.js 22.20 or newer. Local credentials belong in `.env.local
 | `npm ci` | install the locked dependencies |
 | `npm run dev` | start the local site at localhost:5173 |
 | `npm run check` | check JavaScript syntax and run tests |
+| `npm run test:browser` | check page loading and navigation in desktop and phone Chromium |
 | `npm run build` | assemble the public files in `dist/` |
 | `npm run db:migrate` | apply database migrations when needed |
 
 Stop the existing local server before restarting after backend changes. Run checks and a build before pushing; Vercel builds from source and does not run migrations. Credentials and generated build output stay out of Git.
+
+The browser checks in `checks/browser/` serve the real page assets through Playwright and replace API responses with fixtures. They need no running server or database, and cannot submit drawings or votes to Neon. One-time setup: `npm install --save-dev @playwright/test`, then `npx playwright install chromium`. Run `npm run test:browser` afterward. Commit the dependency and lockfile updates from installation too.
 
 [Deployment and release checks](docs/DEPLOYMENT.md) · [Design direction](docs/DESIGN.md)

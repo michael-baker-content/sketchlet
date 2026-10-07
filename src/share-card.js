@@ -3,6 +3,7 @@ import { setCloseIcon } from './close-button.js';
 
 const WIDTH = 1200, HEIGHT = 920;
 const FONT = '"Unkempt", cursive';
+const caption = drawing => `${drawing.displayName || 'someone'} drew a ${drawing.prompt}`;
 
 function bevel(ctx, x, y, width, height, fill, inset = false) {
   ctx.fillStyle = fill; ctx.fillRect(x, y, width, height);
@@ -52,6 +53,13 @@ export async function createShareCard(drawing, { signal } = {}) {
     for (let y = 0; y < HEIGHT; y += 8) for (let x = 0; x < WIDTH; x += 8) {
       if ((x / 8 + y / 8) % 2 === 0) ctx.fillRect(x, y, 8, 8);
     }
+    // Keep essential content inside the central square, with extra breathing
+    // room for messaging previews that crop the sides or round their corners.
+    // The PNG dimensions stay unchanged; only decorative checks reach its edges.
+    const contentScale = .7;
+    ctx.save();
+    ctx.translate(WIDTH * (1 - contentScale) / 2, HEIGHT * (1 - contentScale) / 2);
+    ctx.scale(contentScale, contentScale);
     bevel(ctx, 24, 24, WIDTH - 48, HEIGHT - 48, '#d5d0d9');
     ctx.fillStyle = '#e7d9f5'; ctx.fillRect(28, 28, WIDTH - 56, 112);
     const gradient = ctx.createLinearGradient(56, 0, 310, 0);
@@ -60,7 +68,7 @@ export async function createShareCard(drawing, { signal } = {}) {
     ctx.font = `400 30px ${FONT}`; ctx.fillStyle = '#493655'; ctx.textAlign = 'right';
     ctx.fillText(formatPromptDate(drawing.date), WIDTH - 56, 98); ctx.textAlign = 'left';
     ctx.fillStyle = '#6d4c86'; ctx.fillRect(28, 138, WIDTH - 56, 2); ctx.fillRect(28, 144, WIDTH - 56, 2);
-    text(ctx, `prompt: “${drawing.prompt}”`, 56, 202, WIDTH - 112, 43, { bold: true });
+    text(ctx, caption(drawing), 56, 202, WIDTH - 112, 43, { bold: true });
     bevel(ctx, 56, 232, 600, 600, '#ffffff', true);
     const edge = 592, scale = Math.min(edge / image.naturalWidth, edge / image.naturalHeight);
     const iw = image.naturalWidth * scale, ih = image.naturalHeight * scale;
@@ -73,8 +81,9 @@ export async function createShareCard(drawing, { signal } = {}) {
     text(ctx, rated ? `${drawing.average.toFixed(1)} / 5` : 'not rated yet', 728, 452, 384, rated ? 64 : 42, { bold: true });
     text(ctx, `${drawing.count || 0} ${drawing.count === 1 ? 'rating' : 'ratings'}`, 728, 500, 384, 30);
     text(ctx, 'ratings when shared', 728, 540, 384, 23, { color: '#594a64' });
-    text(ctx, 'a drawing a day', 728, 700, 384, 32, { bold: true });
+    text(ctx, 'a little drawing every day', 728, 700, 384, 32, { bold: true });
     text(ctx, location.host, 728, 790, 384, 29, { bold: true });
+    ctx.restore();
     return await new Promise((resolve, reject) => canvas.toBlob(blob => {
       if (blob) resolve(blob); else reject(new Error('could not create the card. please try again.'));
     }, 'image/png'));
@@ -88,7 +97,7 @@ export function openShareCard(drawing, trigger) {
   dialog.innerHTML = '<div class="share-card-heading"><h2 id="share-card-title">share card</h2><button class="web-button" data-close aria-label="close share card">close</button></div><p class="share-card-status" role="status">creating your card…</p><img class="share-card-preview" hidden><div class="share-card-actions"><button class="web-button primary" data-copy disabled>copy image</button><a class="web-button" data-download hidden>download png</a><button class="web-button" data-retry hidden>try again</button></div>';
   setCloseIcon(dialog.querySelector('[data-close]'));
   const preview = dialog.querySelector('img');
-  preview.alt = `Sketchlet card: ${drawing.prompt}, drawn by ${drawing.displayName || 'anonymous'}, ${formatPromptDate(drawing.date)}`;
+  preview.alt = `sketchlet card: ${caption(drawing)}, ${formatPromptDate(drawing.date)}`;
   const status = dialog.querySelector('[role="status"]');
   const copy = dialog.querySelector('[data-copy]');
   const download = dialog.querySelector('[data-download]');

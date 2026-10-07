@@ -1,5 +1,7 @@
 import { COLORS, BRUSH_SIZES, CANVAS_SIZE, createDocument, draftKey, restoreDraft, History } from './model.js';
-import { BRUSH_SHAPES, BRUSH_STYLES, createBrushRenderer, roughVertices } from './brushes.js';
+import { BRUSH_SHAPES, DRAWING_TOOLS, createBrushRenderer, roughVertices } from './brushes.js';
+import { fillRuns, drawFill } from './fill.js';
+import { openDraftDatabase, readDraft } from './draft-storage.js';
 import { createStrokeCache, createActivePencilCache, watchCanvasRecovery } from './canvas-cache.js';
 import { setCloseIcon } from './close-button.js';
 import { canvasPoint, appendPointerSamples } from './pointer-input.js';
@@ -77,6 +79,7 @@ document.addEventListener('scroll', () => { cursorPoint = null; eraserCursor.cla
 
 function toast(message) { $('#toast').textContent = message; $('#toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 2600); }
 function drawStroke(context, stroke) {
+  if (stroke.tool === 'fill') { drawFill(context, stroke); return; }
   if (stroke.shape !== undefined) { drawShapedStroke(context, stroke); return; }
   // Retain the original renderer for saved strokes without an explicit shape.
   context.save();
@@ -207,17 +210,17 @@ for (const id of ['undo', 'redo']) {
 }
 const styleSection = document.createElement('div');
 styleSection.className = 'tool-section brush-style-section';
-styleSection.innerHTML = '<label class="brush-select-label">brush style<select id="brush-style"></select></label>';
+styleSection.innerHTML = '<label class="brush-select-label">drawing tools<select id="brush-style"></select></label>';
 const shapeSection = document.createElement('div');
 shapeSection.className = 'tool-section brush-shape-section';
 shapeSection.innerHTML = '<label class="brush-select-label">brush shape<select id="brush-shape"></select></label>';
 document.querySelector('.sizes').closest('.tool-section').after(styleSection);
 styleSection.before(shapeSection);
-for (const [select, options] of [[$('#brush-shape'), BRUSH_SHAPES], [$('#brush-style'), BRUSH_STYLES]]) {
+for (const [select, options] of [[$('#brush-shape'), BRUSH_SHAPES], [$('#brush-style'), DRAWING_TOOLS]]) {
   for (const value of options) select.add(new Option(value, value));
 }
 function selectShape(value) { if (!BRUSH_SHAPES.includes(value)) return; brushShape = value; syncToolViews(); updateEraserCursor(); }
-function selectStyle(value) { if (!BRUSH_STYLES.includes(value)) return; brushStyle = value; syncToolViews(); }
+function selectStyle(value) { if (!DRAWING_TOOLS.includes(value)) return; brushStyle = value; syncToolViews(); }
 $('#brush-shape').onchange = event => selectShape(event.target.value);
 $('#brush-style').onchange = event => selectStyle(event.target.value);
 function selectSize(next) {
@@ -231,9 +234,23 @@ $('#redo').onclick = () => { if (ready && !active && history.redo()) changed(); 
 $('#clear').onclick = () => { if (!ready || active || !history.document.strokes.length) return; history.commit({ ...history.document, strokes: [] }); changed(); toast('Fresh canvas. Undo brings your drawing back.'); };
 canvas.addEventListener('pointerdown', event => {
   if (!ready || active || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+  if (tool === 'brush' && brushStyle === 'fill') {
+    event.preventDefault();
+    if (!render()) { toast('canvas recovering. please try again.'); return; }
+    const [x, y] = canvasPoint(event, canvas.getBoundingClientRect(), CANVAS_SIZE);
+    try {
+      const runs = fillRuns(ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE), x, y, color);
+      if (!canvasAvailable()) { toast('canvas recovering. please try again.'); return; }
+      if (runs.length) {
+        history.commit({ ...history.document, strokes: [...history.document.strokes, { tool: 'fill', color, runs }] });
+        changed();
+      }
+    } catch { toast('could not fill this area. please try again.'); }
+    return;
+  }
   hideDraftStatus();
   event.preventDefault(); pointerId = event.pointerId; canvas.setPointerCapture(pointerId);
-  active = { tool, color, size, style: brushStyle, shape: brushShape, points: [canvasPoint(event, canvas.getBoundingClientRect(), CANVAS_SIZE)] };
+  active = { tool, color, size, style: tool === 'eraser' ? 'brush' : brushStyle, shape: brushShape, points: [canvasPoint(event, canvas.getBoundingClientRect(), CANVAS_SIZE)] };
   if (tool === 'brush' && brushStyle === 'pencil') active.seed = crypto.getRandomValues(new Uint32Array(1))[0];
   if (tool === 'brush' && brushStyle === 'spray') active.sprayVersion = 3;
   render();
@@ -241,11 +258,17 @@ canvas.addEventListener('pointerdown', event => {
 let frame = null;
 canvas.addEventListener('pointermove', event => {
   if (!active || event.pointerId !== pointerId) return;
-  appendPointerSamples(active.points, event, canvas.getBoundingClientRect(), CANVAS_SIZE);
+  if (active.style === 'line') active.points[1] = canvasPoint(event, canvas.getBoundingClientRect(), CANVAS_SIZE);
+  else appendPointerSamples(active.points, event, canvas.getBoundingClientRect(), CANVAS_SIZE);
   if (frame === null) frame = requestAnimationFrame(() => { frame = null; render(); });
 });
 function finish(event) {
   if (!active || event.pointerId !== pointerId) return;
+  if (active.style === 'line' && event.type === 'pointerup') active.points[1] = canvasPoint(event, canvas.getBoundingClientRect(), CANVAS_SIZE);
+  if (active.style === 'line' && ['pointercancel', 'lostpointercapture'].includes(event.type)) {
+    if (frame !== null) { cancelAnimationFrame(frame); frame = null; }
+    active = null; pointerId = null; render(); return;
+  }
   // changed() paints the committed stroke immediately; a queued preview would
   // otherwise repaint that same result on the next animation frame.
   if (frame !== null) { cancelAnimationFrame(frame); frame = null; }
@@ -283,7 +306,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && rea
 window.addEventListener('pagehide', () => { if (ready) { clearTimeout(saveTimer); persist(); } });
 async function initialize() {
   try {
-    db = await new Promise((resolve, reject) => { const req = indexedDB.open('little-canvas', 1); req.onupgradeneeded = () => req.result.createObjectStore('drafts'); req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); req.onblocked = () => reject(new Error('Storage blocked')); });
+    db = await openDraftDatabase();
   } catch { $('#save-status').textContent = 'saving unavailable'; }
   render(); syncControls();
 }
@@ -301,10 +324,7 @@ export function setPromptDay(day) {
     $('#save-status').hidden = false;
     render(); syncControls(); updateEraserCursor();
     try {
-      const saved = db ? await new Promise((resolve, reject) => {
-        const req = db.transaction('drafts').objectStore('drafts').get(draftKey(day));
-        req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error);
-      }) : null;
+      const saved = db ? await readDraft(db, day) : null;
       history = new History(restoreDraft(saved, day));
       $('#save-status').textContent = !db ? 'saving unavailable' : saved?.day === day ? 'draft restored' : 'fresh canvas';
     } catch { $('#save-status').textContent = 'saving unavailable'; }
@@ -336,7 +356,7 @@ focusView.innerHTML = `<div class="focus-info"><div class="focus-info-top"><p cl
     <label>tools<select data-focus="tool"><option value="brush">draw</option><option value="eraser">erase</option></select></label>
     <label>brush size<select data-focus="size"><option value="5">fine</option><option value="14">mid</option><option value="32">bold</option></select></label>
     <label>brush shape<select data-focus="shape"></select></label>
-    <label>brush style<select data-focus="style"></select></label>
+    <label>drawing tools<select data-focus="style"></select></label>
     <label>color<select data-focus="color"></select></label>
     <label>background<select data-focus="background"></select></label>
   </div>`;
@@ -365,7 +385,7 @@ function syncFocusInfo() {
 const focusInfoObserver = new MutationObserver(syncFocusInfo);
 focusInfoObserver.observe($('.intro'), { subtree: true, childList: true, characterData: true });
 const focusSelect = name => sharedTools.querySelector(`[data-focus="${name}"]`);
-for (const [name, options] of [['shape', BRUSH_SHAPES], ['style', BRUSH_STYLES]]) {
+for (const [name, options] of [['shape', BRUSH_SHAPES], ['style', DRAWING_TOOLS]]) {
   for (const value of options) focusSelect(name).add(new Option(value, value));
 }
 for (const name of ['color', 'background']) for (const entry of COLORS) {
@@ -438,6 +458,10 @@ function syncFocusTools() {
   for (const select of sharedTools.querySelectorAll('select')) select.disabled = !ready;
   focusSelect('style').disabled = !ready || tool === 'eraser';
   $('#brush-style').disabled = tool === 'eraser';
+  const filling = tool === 'brush' && brushStyle === 'fill';
+  focusSelect('size').disabled = focusSelect('shape').disabled = !ready || filling;
+  $('#brush-shape').disabled = !ready || filling;
+  for (const button of document.querySelectorAll('[data-size]')) button.disabled = !ready || filling;
 }
 focusSelect('tool').onchange = event => selectTool(event.target.value);
 focusSelect('size').onchange = event => { selectSize(Number(event.target.value)); };

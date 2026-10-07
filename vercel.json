@@ -6,7 +6,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/index.js": { "maxDuration": 30 },
-    "api/pages.js": { "maxDuration": 30, "includeFiles": "{index.html,gallery.html}" }
+    "api/pages.js": { "maxDuration": 30, "includeFiles": "{index.html,gallery.html,src/assets/favicon.svg}" }
   },
   "redirects": [
     { "source": "/index.html", "destination": "/", "permanent": true },

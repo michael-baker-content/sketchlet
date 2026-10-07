@@ -5,12 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f2fc">
   <title>gallery — sketchlet</title>
+  <link rel="icon" type="image/svg+xml" href="/src/assets/favicon.svg">
+  <script src="/src/loading.js"></script>
   <link rel="stylesheet" href="/src/styles/base.css">
   <link rel="stylesheet" href="/src/styles/playful.css">
   <link rel="stylesheet" href="/src/styles/retro.css">
   <link rel="stylesheet" href="/src/styles/flow.css">
+  <link rel="stylesheet" href="/src/styles/loading.css">
 </head>
 <body>
+  <div id="page-loader" role="status" aria-live="polite">
+    <svg class="loading-sketch" viewBox="0 0 140 48" aria-hidden="true"><path pathLength="1" d="M8 34 Q28 4 42 26 T75 22 T104 26 L130 14 M12 41 Q65 35 124 40"/></svg>
+    <p id="loading-message">loading sketchlet…</p>
+    <button id="loading-retry" class="web-button" hidden>try again</button>
+  </div>
+  <noscript><p>please enable javascript to use sketchlet.</p></noscript>
   <header class="site-header">
     <a class="brand" href="/" aria-label="sketchlet home">sketchlet</a>
     <nav aria-label="main navigation"><a id="open-home" href="/">home</a><a id="open-archive" href="/gallery">gallery</a></nav>

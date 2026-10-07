@@ -18,12 +18,24 @@ test('incomplete home waits for status before initializing the editor', async ()
   const pending = new Promise(resolve => { resolveStatus = resolve; });
   const events = [], today = { submission: null }, editor = {};
   const starting = startHome({ loadToday: () => pending,
+    checkDraft: async () => true,
     loadEditor: async () => { events.push('editor'); return editor; },
     startPage: async options => { events.push('page'); assert.equal(options.editor, editor); } });
   assert.deepEqual(events, []);
   resolveStatus(today);
   await starting;
   assert.deepEqual(events, ['editor', 'page']);
+});
+
+test('new day shows instructions without initializing the editor', async () => {
+  const today = { date: '2026-10-07', submission: null };
+  const loadEditor = () => assert.fail('instructions must not initialize the editor');
+  let shown;
+  await startHome({ loadToday: async () => today, checkDraft: async () => false, loadEditor,
+    startPage: async options => { shown = options; } });
+  assert.equal(shown.editor, null);
+  assert.equal(shown.loadEditor, loadEditor);
+  assert.equal(shown.storageUnavailable, false);
 });
 
 test('failed status lookup never assumes that drawing is allowed', async () => {

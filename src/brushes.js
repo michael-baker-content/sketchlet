@@ -1,5 +1,6 @@
 export const BRUSH_SHAPES = ['circle', 'square', 'rough'];
 export const BRUSH_STYLES = ['brush', 'dashed', 'dotted', 'marker', 'spray', 'pencil'];
+export const DRAWING_TOOLS = [...BRUSH_STYLES, 'fill', 'line'];
 const roughRadii = [.96, .73, 1, .78, .94, .7, .98, .8, .91];
 export const roughVertices = roughRadii.map((radius, index) => {
   const angle = index / roughRadii.length * Math.PI * 2;

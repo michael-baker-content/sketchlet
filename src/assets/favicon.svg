@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">
+  <title>sketchlet pixel paintbrush</title>
+  <path fill="#f5f2fc" d="M0 0h16v16H0z"/>
+  <!-- Stepped outline, purple handle, metal band, and paint-tipped bristles. -->
+  <path fill="#343044" d="M12 1h3v3h-1v2h-2v2h-2v2H9v3H7v1H5v1H1v-4h1V9h1V7h3V6h2V4h2V2h2z"/>
+  <path fill="#8559ae" d="M12 2h2v2h-1v1h-2v2H9V5h2V3h1z"/>
+  <path fill="#b39adb" d="M12 2h2v1h-2v1h-1V3h1zM10 4h1v1h-1z"/>
+  <path fill="#b5b0bc" d="M7 6h2v1h1v2H8V8H7z"/>
+  <path fill="#fff3d2" d="M4 8h2v1h1v1h1v2H6v1H3v-2h1z"/>
+  <path fill="#8559ae" d="M2 11h2v1h2v1H4v1H2z"/>
+  <path fill="#b39adb" d="M2 13h1v1H2z"/>
+</svg>

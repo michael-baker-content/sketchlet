@@ -12,13 +12,35 @@ const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQ
 
 // Serve real page assets in the browser while replacing ALL API traffic.
 // No running server, database credentials, or production writes are involved.
-async function fixture(page, overrides = {}) {
+async function fixture(page, overrides = {}, { emptyDraft = false } = {}) {
+  // Existing editor tests represent a returning artist. Fresh-day tests opt out.
+  await page.addInitScript(({ day, emptyDraft }) => {
+    window.fixtureDraftReady = new Promise((resolve, reject) => {
+      const request = indexedDB.open('little-canvas', 1);
+      request.onupgradeneeded = () => request.result.createObjectStore('drafts');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const db = request.result;
+        if (emptyDraft) { db.close(); resolve(); return; }
+        const tx = db.transaction('drafts', 'readwrite'), store = tx.objectStore('drafts');
+        const key = `prompt-v2:${day}`, existing = store.get(key);
+        existing.onsuccess = () => {
+          if (!existing.result) store.put({ day, document: { background: '#FFFFFF', strokes: [
+            { tool: 'brush', style: 'brush', shape: 'circle', size: 5, color: '#343044', points: [[0,0]] },
+          ] } }, key);
+        };
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = () => reject(tx.error);
+      };
+    });
+  }, { day: today.date, emptyDraft });
   const requests = [], errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/*', async route => {
     const url = new URL(route.request().url());
     requests.push(url.pathname);
     if (url.origin !== 'http://sketchlet.test') return route.abort();
+    if (url.pathname === '/api/today') await page.evaluate(() => window.fixtureDraftReady);
     if (overrides[url.pathname]) return overrides[url.pathname](route);
     if (url.pathname.endsWith('/image')) return route.fulfill({ contentType: 'image/png', body: pixel });
     const data = {
@@ -45,6 +67,81 @@ function expectNoEditor(requests) {
   expect(requests).not.toContain('/src/editor.html');
   expect(requests).not.toContain('/src/submission.js');
 }
+
+test('fresh day shows instructions and preloads without mounting the editor until begin', async ({ page }) => {
+  const { errors } = await fixture(page, {}, { emptyDraft: true });
+  await page.goto('/');
+  await expect(page.locator('#begin-drawing')).toBeVisible();
+  await expect(page.locator('#page-loader')).toBeHidden();
+  await expect(page.locator('.drawing-welcome')).toContainText(today.prompt);
+  await expect(page.locator('canvas,.studio,.submit-bar')).toHaveCount(0);
+  await page.locator('#begin-drawing').click();
+  await expect(page.locator('#canvas')).toBeVisible();
+  await expect(page.locator('#review-drawing')).toBeEnabled();
+  expect(errors).toEqual([]);
+});
+
+test('begin rechecks a submission created while reading instructions', async ({ page }) => {
+  let calls = 0;
+  await fixture(page, { '/api/today': route => route.fulfill({ json: {
+    ...today, submission: ++calls === 1 ? null : drawing,
+  } }) }, { emptyDraft: true });
+  await page.goto('/');
+  await page.locator('#begin-drawing').click();
+  await expect(page.locator('.finished-drawing')).toBeVisible();
+  await expect(page.locator('canvas,.studio')).toHaveCount(0);
+});
+
+test('startup loader conceals the shell until the editor is ready and respects reduced motion', async ({ page }) => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await fixture(page, { '/api/today': async route => { await pending; await route.fulfill({ json: today }); } });
+  await page.goto('/');
+  await expect(page.locator('#page-loader')).toBeVisible();
+  await expect(page.locator('.site-header')).toBeHidden();
+  expect(await page.locator('.loading-sketch path').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
+  release();
+  await expect(page.locator('#page-loader')).toBeHidden();
+  await expect(page.locator('#canvas')).toBeVisible();
+  await expect(page.locator('#review-drawing')).toBeEnabled();
+  await expect(page.locator('.site-header')).toBeVisible();
+});
+
+test('completed home waits for its image before revealing the page', async ({ page }) => {
+  let release;
+  const pending = new Promise(resolve => { release = resolve; });
+  await fixture(page, {
+    '/api/today': route => route.fulfill({ json: { ...today, submission: drawing } }),
+    [drawing.image]: async route => { await pending; await route.fulfill({ contentType: 'image/png', body: pixel }); },
+  });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('.finished-drawing')).toHaveCount(1);
+  await expect(page.locator('#page-loader')).toBeVisible();
+  await expect(page.locator('.site-header')).toBeHidden();
+  release();
+  await expect(page.locator('#page-loader')).toBeHidden();
+  await expect(page.locator('.finished-drawing')).toBeVisible();
+});
+
+test('startup failure dismisses the loader and offers retry', async ({ page }) => {
+  await fixture(page, { '/api/today': route => route.fulfill({ status: 503, json: { error: 'offline' } }) });
+  await page.goto('/');
+  await expect(page.locator('#page-loader')).toBeHidden();
+  await expect(page.locator('#page-content')).toContainText('offline');
+  await expect(page.locator('#page-content').getByRole('button', { name: 'try again' })).toBeVisible();
+});
+
+test('missing page module stops the loader animation and exposes retry', async ({ page }) => {
+  await page.clock.install();
+  await fixture(page, { '/src/home-page.js': route => route.abort() });
+  await page.goto('/');
+  await expect(page.locator('#page-loader')).toBeVisible();
+  await page.clock.fastForward(15001);
+  await expect(page.locator('#loading-retry')).toBeVisible();
+  await expect(page.locator('#loading-message')).toContainText('taking longer');
+  expect(await page.locator('.loading-sketch path').evaluate(el => getComputedStyle(el).animationName)).toBe('none');
+});
 
 test('incremental pencil matches replay pixels over texture, after recovery and erasing', async ({ page }) => {
   await fixture(page);
@@ -127,6 +224,52 @@ test('home waits for status, then mounts working normal and full-screen tools', 
   await page.locator('.focus-close').click();
   await expect(page.locator('.studio #canvas')).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test('line preview and connected fill survive undo, redo and draft reload', async ({ page }) => {
+  await fixture(page);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(page.locator('#review-drawing')).toBeEnabled();
+  await page.locator('.focus-launch').click();
+  const canvas = page.locator('#canvas');
+  await page.locator('[data-focus="style"]').selectOption('line');
+  const box = await canvas.boundingBox();
+  await page.mouse.move(box.x + 1, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 3);
+  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2);
+  await page.mouse.up();
+  const line = await canvas.evaluate(c => c.toDataURL());
+  await page.locator('[data-focus="style"]').selectOption('fill');
+  await expect(page.locator('[data-focus="shape"]')).toBeDisabled();
+  await expect(page.locator('[data-focus="size"]')).toBeDisabled();
+  await page.locator('[data-color-menu="color"]').click();
+  await page.locator('.color-menu-option[data-color="#CE4949"]').click();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 4);
+  const filled = await canvas.evaluate(c => c.toDataURL());
+  expect(filled).not.toBe(line);
+  expect(await canvas.evaluate(c => {
+    const ctx = c.getContext('2d');
+    return [Array.from(ctx.getImageData(600,300,1,1).data), Array.from(ctx.getImageData(600,900,1,1).data)];
+  })).toEqual([[206,73,73,255],[255,255,255,255]]);
+  await page.locator('#undo').click();
+  expect(await canvas.evaluate(c => c.toDataURL())).toBe(line);
+  await page.locator('#redo').click();
+  expect(await canvas.evaluate(c => c.toDataURL())).toBe(filled);
+  await expect(page.locator('#save-status')).toHaveText('draft saved');
+  await page.reload();
+  await expect(page.locator('#review-drawing')).toBeEnabled();
+  expect(await canvas.evaluate(c => c.toDataURL())).toBe(filled);
+  await page.locator('.focus-launch').click();
+  await page.locator('[data-color-menu="background"]').click();
+  await page.locator('.color-menu-option[data-color="#FFF3D2"]').click();
+  expect(await canvas.evaluate(c => {
+    const ctx = c.getContext('2d');
+    return [Array.from(ctx.getImageData(600,300,1,1).data), Array.from(ctx.getImageData(600,900,1,1).data)];
+  })).toEqual([[206,73,73,255],[255,243,210,255]]);
+  await page.locator('#undo').click();
+  expect(await canvas.evaluate(c => c.toDataURL())).toBe(filled);
 });
 
 test('tool choices and background history stay synchronized across desktop and full screen', async ({ page }) => {
@@ -350,11 +493,15 @@ test('share card offers download when image copying is unsupported', async ({ pa
 });
 
 test('failed card generation can be retried without affecting the drawing', async ({ page }) => {
-  let fail = true;
+  let fail = false;
   await fixture(page, { [drawing.image]: route => fail
     ? route.fulfill({ status: 503, body: 'unavailable' })
     : route.fulfill({ contentType: 'image/png', body: pixel }) });
   await page.goto(drawing.url);
+  await expect(page.locator('#page-loader')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'share card', exact: true })).toBeVisible();
+  // Fail the card generator's fetch, not the page's initial image decode.
+  fail = true;
   await page.getByRole('button', { name: 'share card', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'share card' });
   await expect(dialog.getByRole('button', { name: 'try again' })).toBeVisible();
@@ -363,6 +510,20 @@ test('failed card generation can be retried without affecting the drawing', asyn
   await expect(dialog.locator('img')).toBeVisible();
   await dialog.getByRole('button', { name: 'close share card' }).click();
   await expect(page.locator('#start-rating')).toBeVisible();
+});
+
+test('failed initial drawing image reveals an error and reload can recover', async ({ page }) => {
+  let fail = true;
+  await fixture(page, { [drawing.image]: route => fail
+    ? route.fulfill({ status: 503, body: 'unavailable' })
+    : route.fulfill({ contentType: 'image/png', body: pixel }) });
+  await page.goto(drawing.url);
+  await expect(page.locator('#page-loader')).toBeHidden();
+  await expect(page.locator('#page-content')).toContainText('could not load the drawing image');
+  fail = false;
+  await page.locator('#page-content').getByRole('button', { name: 'try again' }).click();
+  await expect(page.locator('.finished-drawing')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'share card', exact: true })).toBeVisible();
 });
 
 test('leaving a delayed gallery view prevents stale content from replacing the new view', async ({ page }) => {

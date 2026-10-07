@@ -12,6 +12,8 @@ Everyone gets the same action-and-noun prompt. It changes at **midnight Eastern 
 
 Draw, erase, change your mind, and keep going. Your unfinished canvas saves automatically in this browser. Each day's draft stays attached to its own prompt, so yesterday's kite won't accidentally become today's flower.
 
+Starting fresh? Today's page shows the prompt and a few instructions with a **begin drawing** button. Editor files prepare in the background while you read. An existing draft—including a background-only edit—opens straight into the workspace; a completed day opens your submitted drawing.
+
 When you're ready:
 
 - **save to gallery** publishes your drawing after a confirmation. You get one submission per day, and it's final once saved.
@@ -29,9 +31,12 @@ The canvas is square, with a 1200 × 1200 pixel export and support for mouse, to
 | size | fine, mid, and bold |
 | shape | circle, square, and rough |
 | style | brush, dashed, dotted, marker, spray, and pencil |
+| drawing tools | the brush styles above, plus solid straight lines and connected-area fill |
 | second thoughts | eraser, undo, redo, and an undoable clear |
 
 Shapes work across every brush style and the eraser. Marker strokes are translucent, pencil grain builds up as you draw over it, and spray scatters small shaped dots.
+
+Choose **line** in drawing tools, drag to preview, and release to commit a solid line using your selected size and shape. **Fill** colors the connected area you tap; size and shape are disabled for fill. A small color tolerance includes softened edges, but gaps in pencil or spray boundaries remain openings. Each line or fill is one undo step. The draw/erase selector still switches to the regular eraser.
 
 Drawing and erasing follow your input without an added animation delay. The drawing workspace suppresses text selection and the canvas's long-press menu to keep gestures focused on drawing. Undo remembers up to 60 edits during the current session. **Ctrl/Cmd+Z** undoes; **Ctrl/Cmd+Shift+Z** redoes.
 
@@ -68,7 +73,7 @@ Sketchlet uses **HTML, CSS, and JavaScript**, with the Canvas API doing the draw
 
 The database enforces one drawing per guest per prompt and one editable vote per guest per drawing. Server-side checks block self-voting, and shared request limits help curb abuse. Without accounts, these are browser-based rules—not proof that each visitor is a different person.
 
-Public page metadata is rendered server-side for social crawlers. Home, gallery, prompt-gallery, and drawing URLs provide Open Graph and large-image X card tags; drawing cards use a generated 1200×630 image while the artwork remains in private object storage.
+Public page metadata is rendered server-side for social crawlers. All shared links advertise the pixel paintbrush logo, never submitted artwork or ratings. Home uses “sketchlet - a little drawing every day”; drawing titles credit the creator, such as “Michael drew a singing kite,” regardless of who sends the link. Social descriptions stay short, and X cards request the compact summary format. Artwork sharing remains an explicit **share card** action. Messaging apps decide the final layout and may retain cached previews.
 
 The main pieces are:
 

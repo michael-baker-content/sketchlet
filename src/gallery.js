@@ -3,9 +3,10 @@ import { easternDate, promptForDate, formatPromptDate } from './prompts.js';
 import { createRatingSkips } from './rating-session.js';
 import { drawingPath, drawingIdFromPath } from './drawing-links.js';
 
-export async function startPage({ page, today = null, editor = null }) {
+export async function startPage({ page, today = null, editor = null, loadEditor = null, storageUnavailable = false }) {
 const $ = selector => document.querySelector(selector);
-const main = $('main'), studio = $('.studio'), intro = $('.intro');
+const main = $('main');
+let studio = $('.studio'), intro = $('.intro');
 let editorUI = null;
 const panel = $('#page-content');
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -40,7 +41,10 @@ async function saveName(value) {
   document.querySelectorAll('[data-own-author]').forEach(element => { element.textContent = `by ${displayName || 'anonymous'}`; });
 }
 const notice = document.createElement('div'); notice.className = 'preview-notice'; notice.setAttribute('role','status'); notice.textContent = 'connecting to the gallery…'; notice.hidden=true; main.prepend(notice);
-if (intro) intro.innerHTML = '<div class="daily-heading"><div><p class="prompt-date"></p><h1></h1></div></div>';
+function prepareIntro() {
+  if (intro) intro.innerHTML = '<div class="daily-heading"><div><p class="prompt-date"></p><h1></h1></div></div>';
+}
+prepareIntro();
 const nameButton = document.createElement('button');
 nameButton.className = 'name-nav'; nameButton.textContent = 'profile';
 nameButton.setAttribute('aria-haspopup', 'dialog');
@@ -221,7 +225,11 @@ header();
 function show(content) { if(intro) intro.hidden=page==='gallery'; hideEditor(); panel.hidden=false; panel.innerHTML=content; const heading=panel.querySelector('h2'); if(heading){document.title=`${heading.textContent} — sketchlet`;heading.tabIndex=-1;heading.focus();} }
 function title(text, back = location.pathname.replace(/\/$/,'') === '/gallery' ? 'gallery' : 'home') { return `<div class="panel-title"><h2>${escape(text)}</h2><button class="web-button" id="back-home" data-return="${back}">${back === 'gallery' ? 'back to gallery' : 'back to today'}</button></div>`; }
 function wireHome() { const button=$('#back-home'); button.onclick=button.dataset.return==='gallery'?()=>{openArchive();}:home; }
-function errorScreen(error) { show(title('could not load')+`<div class="empty-state"><p>${escape(error.message)}</p></div>`); wireHome(); }
+function errorScreen(error) {
+  show(title('could not load')+`<div class="empty-state"><p>${escape(error.message)}</p><button class="web-button" id="retry-page">try again</button></div>`);
+  $('#retry-page').onclick = () => window.location.reload();
+  wireHome();
+}
 function showLoading(label) {
   if (intro) intro.hidden = true;
   hideEditor();
@@ -383,9 +391,27 @@ async function load() {
     await adoptDay(today);
     if (generation !== viewGeneration) return;
     if (state.submission) { showDrawing(state.submission); return; }
-    if (!editor) throw new Error('drawing tools are unavailable. please reload.');
+    if (!editor) {
+      if (!loadEditor) throw new Error('drawing tools are unavailable. please reload.');
+      show(`<div class="panel-title"><h2>today's drawing</h2></div><div class="drawing-welcome"><p class="display-date">${escape(formatPromptDate(state.date))}</p><h3>today's prompt: "${escape(state.prompt)}"</h3><p>draw your interpretation. a quick doodle is welcome.</p><ul><li>your draft saves on this device.</li><li>one drawing per day — final once saved to the gallery.</li><li>a new prompt arrives at midnight eastern.</li></ul>${storageUnavailable ? '<p role="status">local draft storage is unavailable. your drawing may not survive a reload.</p>' : ''}<button class="web-button primary" id="begin-drawing">begin drawing</button><p id="begin-status" role="status"></p></div>`);
+      $('#begin-drawing').onclick = async () => {
+        const button = $('#begin-drawing'); button.disabled = true; button.textContent = 'opening…';
+        try {
+          // Reading the introduction can cross midnight or another tab's save.
+          const next = await api('/api/today');
+          if (next.date !== today.date || next.submission) { today = next; await load(); return; }
+          editor = await loadEditor();
+          studio = $('.studio'); intro = $('.intro');
+          prepareIntro();
+          await attachEditor();
+          today = next; await load();
+          $('#canvas').focus({ preventScroll: true });
+        } catch (error) { errorScreen(error); }
+      };
+      return;
+    }
     intro.hidden=false; panel.hidden=true; studio.hidden=false; editorUI.bar.hidden=false;
-    document.title='sketchlet — drawing studio';
+    document.title='sketchlet - a little drawing every day';
     return;
   }
   const params = new URLSearchParams(location.search);
@@ -402,7 +428,7 @@ async function load() {
   } catch (error) { if (generation === viewGeneration) errorScreen(error); }
 }
 window.addEventListener('popstate', () => { load().catch(errorScreen); });
-if (editor) {
+async function attachEditor() {
   const { createSubmissionControls } = await import('./submission.js');
   editorUI = createSubmissionControls({
     studio, editor, getState: () => state, isConnected: () => connected,
@@ -410,6 +436,7 @@ if (editor) {
     revision: () => viewGeneration, isCurrent: value => value === viewGeneration,
   });
 }
+if (editor) await attachEditor();
 if (typeof today?.displayName === 'string') rememberName(today.displayName);
 if (page === 'home') {
   let checkingDay = false;

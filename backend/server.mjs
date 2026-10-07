@@ -5,7 +5,7 @@ import { extname } from 'node:path';
 import { publicFile } from './public-files.mjs';
 import { handlePublicPage } from './social.mjs';
 
-const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript' };
+const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml' };
 const configured = ['DATABASE_URL', 'AWS_ENDPOINT_URL_S3', 'AWS_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'].every(key => !!process.env[key]);
 let api;
 try { if (configured) api = (await import('./api.mjs')).handleApi; }

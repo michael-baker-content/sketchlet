@@ -1,0 +1,19 @@
+#page-loader { display: none; }
+html.page-loading { overflow: hidden; background: #f5f2fc; }
+.page-loading body { background: #f5f2fc; }
+.page-loading body > :not(#page-loader):not(script) { visibility: hidden; opacity: 0; pointer-events: none; }
+body > header, body > main { transition: opacity 150ms ease-out; }
+.page-loading #page-loader {
+  display: grid; position: fixed; inset: 0; z-index: 10000;
+  align-content: center; justify-items: center; gap: 12px;
+  padding: 24px; text-align: center; color: #343044; background: #f5f2fc;
+}
+#page-loader p { margin: 0; }
+.loading-sketch { width: 140px; height: 48px; overflow: visible; }
+.loading-sketch path { fill: none; stroke: #8559ae; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; animation: pencil-loading 1.4s ease-in-out infinite; }
+@keyframes pencil-loading { 0% { stroke-dashoffset: 1; } 70%, 100% { stroke-dashoffset: 0; } }
+.loading-stalled .loading-sketch path { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .loading-sketch path { animation: none; }
+  body > header, body > main { transition: none; }
+}

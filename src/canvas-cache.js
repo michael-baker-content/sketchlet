@@ -1,4 +1,4 @@
-import { createStrokeSampler } from './brushes.js';
+import { createStrokeSampler, strokeSpacing } from './brushes.js';
 
 // Only seeded pencil deposits are independently cumulative. Other styles must
 // keep their single-fill semantics, including antialiased opaque edges.
@@ -14,7 +14,7 @@ export function createActivePencilCache(context, size, draw) {
         this.invalidate();
         context.clearRect(0, 0, size, size);
         context.drawImage(committedCanvas, 0, 0);
-        samples = createStrokeSampler(Math.max(.75, stroke.size * .12));
+        samples = createStrokeSampler(strokeSpacing(stroke));
         current = stroke; base = strokes;
       }
       try { draw(context, stroke, samples(stroke.points)); }

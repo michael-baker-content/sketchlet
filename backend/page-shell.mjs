@@ -1,10 +1,22 @@
-<!doctype html>
+// Server/build-only template. Values are fixed page definitions, never user input.
+const pages = new Map([
+  ['index.html', { title:'sketchlet - a little drawing every day', label:'today', script:'/src/home-page.js' }],
+  ['gallery.html', { title:'gallery — sketchlet', label:'gallery', script:'/src/gallery-page.js' }],
+]);
+
+export const PAGE_FILES = [...pages.keys()];
+
+// null means this public asset is a source file rather than a generated page.
+export function renderPageShell(file) {
+  const page = pages.get(file);
+  if (!page) return null;
+  return `<!doctype html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f2fc">
-  <title>gallery — sketchlet</title>
+  <title>${page.title}</title>
   <link rel="icon" type="image/svg+xml" href="/src/assets/favicon.svg">
   <script src="/src/loading.js"></script>
   <link rel="stylesheet" href="/src/styles/base.css">
@@ -25,12 +37,15 @@
     <nav aria-label="main navigation"><a id="open-home" href="/">home</a><a id="open-archive" href="/gallery">gallery</a></nav>
   </header>
   <main>
-    <section id="page-content" class="flow-panel" aria-label="gallery">
-      <div class="panel-title"><h2>gallery</h2></div>
+    <section id="page-content" class="flow-panel" aria-label="${page.label}">
+      <div class="panel-title"><h2>${page.label}</h2></div>
       <div class="empty-state" role="status">loading…</div>
     </section>
   </main>
+  <footer class="site-footer">one drawing per day · final once saved<br>new prompt at midnight eastern</footer>
   <div id="toast" role="status" class="toast"></div>
-  <script type="module" src="/src/gallery-page.js"></script>
+  <script type="module" src="${page.script}"></script>
 </body>
 </html>
+`;
+}

@@ -1,6 +1,12 @@
 export const BRUSH_SHAPES = ['circle', 'square', 'rough'];
 export const BRUSH_STYLES = ['brush', 'dashed', 'dotted', 'marker', 'spray', 'pencil'];
 export const DRAWING_TOOLS = ['brush', 'marker', 'pencil', 'spray', 'line', 'fill', 'dashed', 'dotted'];
+export function strokeSpacing(stroke) {
+  const style = stroke.tool === 'eraser' ? 'brush' : stroke.style;
+  if (style === 'dotted') return stroke.size * 1.8;
+  if (style === 'spray') return Math.max(1, stroke.size * (stroke.sprayVersion >= 3 ? .45 : .3));
+  return Math.max(.75, stroke.size * .12);
+}
 const roughRadii = [.96, .73, 1, .78, .94, .7, .98, .8, .91];
 export const roughVertices = roughRadii.map((radius, index) => {
   const angle = index / roughRadii.length * Math.PI * 2;
@@ -110,7 +116,7 @@ export function createBrushRenderer(makeCanvas) {
     const erasing = stroke.tool === 'eraser';
     const style = erasing ? 'brush' : stroke.style;
     const lightSpray = style === 'spray' && stroke.sprayVersion >= 3;
-    const spacing = style === 'dotted' ? stroke.size * 1.8 : style === 'spray' ? Math.max(1, stroke.size * (lightSpray ? .45 : .3)) : Math.max(.75, stroke.size * .12);
+    const spacing = strokeSpacing(stroke);
     context.save();
     context.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
     if (style === 'pencil' && stroke.seed !== undefined) {

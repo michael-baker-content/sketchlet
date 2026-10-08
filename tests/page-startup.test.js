@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { startHome } from '../src/page-startup.js';
 import { PUBLIC_FILES } from '../backend/public-files.mjs';
+import { PAGE_FILES, renderPageShell } from '../backend/page-shell.mjs';
 
 test('completed home never loads the editor', async () => {
   const today = { submission: { id: 'saved-drawing' } };
@@ -47,8 +48,8 @@ test('failed status lookup never assumes that drawing is allowed', async () => {
 });
 
 test('page shells contain no editor and all static or dynamic module imports are published', async () => {
-  for (const file of ['index.html', 'gallery.html']) {
-    const html = await readFile(new URL('../' + file, import.meta.url), 'utf8');
+  for (const file of PAGE_FILES) {
+    const html = renderPageShell(file);
     assert.doesNotMatch(html, /<canvas|class="studio"|src="\/src\/studio.js"/);
     assert.match(html, /id="page-content"/);
   }

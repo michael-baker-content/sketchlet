@@ -4,7 +4,7 @@ export function createSubmissionControls({ studio, editor, getState, isConnected
 const $ = selector => document.querySelector(selector);
 const captureDraft = day => editor.captureDraft(day);
 let reviewedDraft = null;
-const bar = document.createElement('div'); bar.className='submit-bar'; bar.innerHTML='<div class="submit-actions"><div class="save-buttons"><button class="web-button primary" id="review-drawing" disabled>save to gallery</button></div></div><footer class="drawing-footer">one drawing per day · final once saved<br>new prompt at midnight eastern</footer>'; studio.after(bar);
+const bar = document.createElement('div'); bar.className='submit-bar'; bar.innerHTML='<div class="submit-actions"><div class="save-buttons"><button class="web-button primary" id="review-drawing" disabled>save to gallery</button></div></div>'; studio.after(bar);
 bar.hidden = true;
 // Keep the studio's existing PNG export handler when moving the download button.
 const downloadButton = $('#download');

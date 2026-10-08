@@ -1,6 +1,7 @@
 /* Classic browser chrome, with the existing touch-friendly layout. */
-:root{background:#d6c6ec;color:#25163c;--line:#847094}
-body{background-color:#d6c6ec;background-image:repeating-conic-gradient(#ffffff26 0% 25%,transparent 0% 50%);background-size:8px 8px}
+/* Paint the checkerboard once, including unused viewport space below short pages. */
+:root{background:#d6c6ec repeating-conic-gradient(#ffffff26 0% 25%,transparent 0% 50%);background-size:8px 8px;color:#25163c;--line:#847094}
+body{background:none}
 .site-header{border-bottom:3px double #6d4c86;background:#e7d9f5}
 .brand{color:#4a147b;text-shadow:1px 1px #fff;text-decoration:none;text-underline-offset:4px}
 @supports ((background-clip:text) or (-webkit-background-clip:text)){
@@ -14,7 +15,7 @@ body{background-color:#d6c6ec;background-image:repeating-conic-gradient(#ffffff2
 .save-status{color:#f2e4ff}
 .canvas-frame{border:3px solid;border-color:#6c6079 #fff #fff #6c6079;border-radius:0;box-shadow:0 0 0 1px #a296ad}
 .section-label h2,.history-label{color:#32124f;text-shadow:1px 1px #fff}
-.tool-button,.tool-switch .tool-button,.sizes button,.brush-styles button,.history-actions button,.download-button,.color-picker summary{
+.tool-button,.tool-switch .tool-button,.sizes button,.brush-styles button,.history-actions button,.download-button{
   background:#ded9e4;color:#271438;border:3px solid;border-color:#fff #74657f #74657f #fff;border-radius:0;box-shadow:1px 1px 0 #403249;transition:none
 }
 .tool-button.selected,.sizes button.selected,.brush-styles button.selected{
@@ -30,13 +31,35 @@ body{background-color:#d6c6ec;background-image:repeating-conic-gradient(#ffffff2
 .history-actions button:last-child:disabled{color:#968b9e}
 .download-button{background:#c8e5b5;color:#244019;font-weight:700;box-shadow:1px 1px 0 #403249}
 .download-button:hover{background:#d7efc7}
-.color-picker summary{background:#f8f4fc;border-color:#74657f #fff #fff #74657f}
-.selected-color-chip{border:2px solid;border-color:#74657f #fff #fff #74657f}
-.picker-arrow{background:#ded9e4;border:2px solid;border-color:#fff #74657f #74657f #fff;padding:0 5px;line-height:22px;color:#271438}
+/* Desktop color picker: complete component styling, without a prior skin. */
+.color-picker{position:relative}
+.color-picker summary{
+  display:flex;align-items:center;gap:10px;min-height:46px;padding:7px 10px;
+  background:#f8f4fc;color:#271438;border:3px solid;border-color:#74657f #fff #fff #74657f;
+  border-radius:0;box-shadow:1px 1px 0 #403249;transition:none;
+  cursor:pointer;list-style:none;font-size:14px
+}
+.color-picker summary::-webkit-details-marker{display:none}
+.color-picker summary:focus-visible{outline:3px solid #9477da;outline-offset:3px}
+.selected-color-chip{width:26px;height:26px;flex-shrink:0;border:2px solid;border-color:#74657f #fff #fff #74657f}
+.picker-arrow{margin-left:auto;background:#ded9e4;border:2px solid;border-color:#fff #74657f #74657f #fff;padding:0 5px;line-height:22px;color:#271438}
 .color-picker[open] .picker-arrow{transform:none;border-color:#74657f #fff #fff #74657f}
-.color-picker .palette{background:#d5d0d9;border:3px solid;border-color:#fff #74657f #74657f #fff;box-shadow:2px 2px 0 #403249;border-radius:0;z-index:5}
+.color-picker .palette{
+  position:absolute;top:calc(100% + 6px);right:0;width:280px;max-width:calc(100vw - 64px);padding:12px;
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;
+  max-height:min(330px,45vh);overflow-y:auto;overscroll-behavior:contain;
+  background:#d5d0d9;border:3px solid;border-color:#fff #74657f #74657f #fff;
+  box-shadow:2px 2px 0 #403249;border-radius:0;z-index:5
+}
+.color-picker .palette .swatch{height:44px;min-height:44px}
 .color-picker .swatch{border:2px solid;border-color:#ffffffa6 #00000066 #00000066 #ffffffa6;border-radius:0}
 .color-picker .swatch.selected{outline:2px dotted #32124f;outline-offset:2px}
+.background-section .color-picker .palette{top:auto;bottom:calc(100% + 6px)}
+@media(max-width:760px){
+  .color-picker .palette{width:260px}
+  .toolbox>.tool-section:nth-child(2) .palette{left:0;right:auto}
+  .toolbox>.background-section .palette{left:auto;right:0;top:calc(100% + 6px);bottom:auto}
+}
 .toast{background:#ffffcc;border:3px solid;border-color:#fff #74657f #74657f #fff;border-radius:0;box-shadow:2px 2px 0 #403249;color:#271438}
 button:focus-visible,summary:focus-visible,a:focus-visible{outline:2px dotted #32124f;outline-offset:3px}
 @media(max-width:760px){.history-actions{border:0}.studio-top{padding:0 10px}.save-status{font-size:9px}}

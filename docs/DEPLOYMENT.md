@@ -12,7 +12,7 @@ npm run test:browser
 npm run build
 ```
 
-Run `npm run db:migrate` separately when a release adds database migrations or when setting up a new database. The drawing performance refactor needs no migrations, dependency installation, environment changes, or draft conversion. The build copies an explicit list of public files into `dist`; it does not load credentials, run migrations, or alter Neon. GitHub Actions repeats the checks and build on pushes and pull requests without database credentials.
+Run `npm run db:migrate` separately when a release adds database migrations or when setting up a new database. The current shared-code, stylesheet, and page-template refactor needs no migrations, dependency installation, environment changes, or draft conversion. The build generates `index.html` and `gallery.html` from the shared page template and copies the other explicitly allowed public assets into `dist`; it does not load credentials, run migrations, or alter Neon. GitHub Actions runs `npm run check` and `npm run build` on pushes and pull requests without database credentials. Browser tests remain a separate local release check; the workflow does not run them.
 
 Social previews are rendered server-side for `/`, `/gallery`, `/gallery?date=YYYY-MM-DD`, and drawing links. All advertise the same 512×512 pixel paintbrush PNG at `/social/paintbrush-v1.png`, derived from the favicon. Open Graph descriptions stay short and `twitter:card=summary` requests a compact card. Legacy social-image URLs also serve the logo; preview generation never accesses artwork storage. The Vercel page function includes the favicon asset. Crawlers do not receive a guest cookie or initialize the editor. Set `APP_ORIGIN` for a custom domain; otherwise the production Vercel URL is used. Messaging apps may retain old previews until their caches refresh. Generated share cards remain separate and unchanged.
 
@@ -107,9 +107,13 @@ The refactor retains the 1200×1200 canvas, 60-edit undo history, and existing d
 
 After automated checks pass, use the affected phone to try layered pencil shading over a texture, a long regular-brush stroke, and erasing across overlapping strokes. Check that releasing a stroke, undo/redo, refreshing a saved draft, and switching normal/full-screen views preserve its appearance. Watch for disappearing strokes, altered pixels, or increasing input lag. Browser tests use simulated phone dimensions, not physical phone hardware, and operation counts are not frame-time benchmarks.
 
-### Remaining limits
+### Page-loading release checks
 
-Page-loading regression checks: after the one-time Playwright setup documented in README, run `npm run test:browser`. These use mocked API traffic and require neither Neon nor a running local server. The page separation needs no database migration. `/gallery` and `/d/:id` are rendered through the public-page function with `gallery.html` as their client shell; `/` uses `index.html` and conditionally loads the editor only after an unfinished-day response.
+Page-loading regression checks: after the one-time Playwright setup documented in README, run `npm run test:browser`. These use mocked API traffic and require neither Neon nor a running local server. The page separation needs no database migration. `/gallery` and `/d/:id` use the gallery shell; `/` uses the home shell and conditionally loads the editor only after an unfinished-day response. Both shells come from `backend/page-shell.mjs`, which is imported by the public-page function and traced into its Vercel bundle. The build also generates `dist/index.html` and `dist/gallery.html`; the root HTML source files are no longer needed. The favicon remains explicitly included in the page function for social image generation. No hosting settings or environment changes are needed for this template refactor.
+
+After deployment, open and refresh `/gallery` and a shared drawing link directly: neither should show the drawing tools or today's home view. Home should show instructions for a fresh day, restore an existing draft, or show the submitted drawing for a completed day. Check that the header, loader, favicon, and styling appear on both page types.
+
+### Remaining limits
 
 - JSON uploads are capped at 4,000,000 bytes to leave room below Vercel's 4.5 MB function limit. Large drawings show a clear error without losing the local draft. A future direct-to-storage upload flow can remove this limit.
 - Postgres enforces 40 POST requests/queue loads per guest and 120 per client IP per minute across function instances. Network keys contain hashes rather than raw IP addresses. Vercel requests use its overwritten `x-forwarded-for` header; local requests use the socket. No new environment variables or migration are required for this rating update. Shared networks share this allowance. Vercel Firewall rules remain an additional deployment-level option, not configured by this change. Rate-limit records can be pruned periodically.

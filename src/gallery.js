@@ -1,4 +1,5 @@
 import { api } from './api-client.js';
+import { counted } from './text-format.js';
 import { easternDate, promptForDate, formatPromptDate } from './prompts.js';
 import { createRatingSkips } from './rating-session.js';
 import { drawingPath, drawingIdFromPath } from './drawing-links.js';
@@ -238,7 +239,7 @@ function showLoading(label) {
   document.title = `${label} — sketchlet`;
 }
 function hideEditor() { if (studio) studio.hidden=true; if (editorUI) editorUI.bar.hidden=true; }
-function ratingText(drawing) { return drawing.count ? `${drawing.average.toFixed(1)} stars · ${drawing.count} ${drawing.count===1?'rating':'ratings'}` : 'no ratings yet'; }
+function ratingText(drawing) { return drawing.count ? `${counted(drawing.average.toFixed(1), 'star')} · ${counted(drawing.count, 'rating')}` : 'no ratings yet'; }
 function syncHeaderLinks() {
   const galleryPage = location.pathname.startsWith('/gallery') || location.pathname.startsWith('/d/') || ['gallery', 'rate'].includes(new URLSearchParams(location.search).get('view'));
   for (const [id, current] of [['open-home', !galleryPage], ['open-archive', galleryPage]]) {
@@ -251,7 +252,7 @@ window.addEventListener('popstate', syncHeaderLinks);
 function route(path) { if(location.pathname+location.search!==path) window.history.pushState({},'',path); syncHeaderLinks(); }
 function home() { window.location.assign('/'); }
 function showDrawing(drawing) {
-  show(title(drawing.mine?'your drawing':drawing.prompt)+`<div class="submission-layout"><img class="finished-drawing" alt="${escape(drawing.prompt)}"><div class="submission-info"><h3>${escape(drawing.prompt)}</h3><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time></p><p class="rating-total">${escape(ratingText(drawing))}</p>${drawing.mine && today?`<div class="streak-box"><strong>${state.streak} ${state.streak===1?'day':'days'}</strong><span>drawing streak</span></div>`:''}<div class="drawing-actions"><button class="web-button" id="copy-drawing-link" type="button">copy link</button><button class="web-button" id="share-drawing-card" type="button">share card</button><button class="web-button primary" id="start-rating">rate drawings</button></div><p class="muted share-status" id="share-status" role="status"></p>${!drawing.mine && drawing.myVote?`<p>your rating: ${drawing.myVote} / 5</p>`:''}</div></div>`);
+  show(title(drawing.mine?'your drawing':drawing.prompt)+`<div class="submission-layout"><img class="finished-drawing" alt="${escape(drawing.prompt)}"><div class="submission-info"><h3>${escape(drawing.prompt)}</h3><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time></p><p class="rating-total">${escape(ratingText(drawing))}</p>${drawing.mine && today?`<div class="streak-box"><strong>${counted(state.streak, 'day')}</strong><span>drawing streak</span></div>`:''}<div class="drawing-actions"><button class="web-button" id="copy-drawing-link" type="button">copy link</button><button class="web-button" id="share-drawing-card" type="button">share card</button><button class="web-button primary" id="start-rating">rate drawings</button></div><p class="muted share-status" id="share-status" role="status"></p>${!drawing.mine && drawing.myVote?`<p>your rating: ${drawing.myVote} / 5</p>`:''}</div></div>`);
   panel.querySelector('img').src=drawing.image;
   panel.querySelector('.submission-info h3').insertAdjacentHTML('afterend', authorMarkup(drawing));
   const copyButton = $('#copy-drawing-link'), shareStatus = $('#share-status');
@@ -327,7 +328,7 @@ function renderRating(){
     wireHome();$('#more-ratings').onclick=()=>startRating();
     if($('#review-skipped'))$('#review-skipped').onclick=()=>{ratingSkips.clear();startRating();};return;
   }
-  show(title('rate a drawing')+`<div class="rating-layout"><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time> · ${escape(drawing.prompt)}</p><img class="rating-drawing" alt="${escape(drawing.prompt)}"><fieldset class="star-picker"><legend>your rating</legend>${[1,2,3,4,5].map(n=>`<label><input type="radio" name="stars" value="${n}" aria-label="${n} ${n===1?'star':'stars'}"><span aria-hidden="true">☆</span></label>`).join('')}</fieldset><p id="rating-status" class="muted" role="status">choose 1–5 stars</p><div class="rating-actions"><button class="web-button" id="skip-rating">skip</button><button class="web-button primary" id="save-rating" disabled>save rating</button></div></div>`);
+  show(title('rate a drawing')+`<div class="rating-layout"><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time> · ${escape(drawing.prompt)}</p><img class="rating-drawing" alt="${escape(drawing.prompt)}"><fieldset class="star-picker"><legend>your rating</legend>${[1,2,3,4,5].map(n=>`<label><input type="radio" name="stars" value="${n}" aria-label="${counted(n, 'star')}"><span aria-hidden="true">☆</span></label>`).join('')}</fieldset><p id="rating-status" class="muted" role="status">choose 1–5 stars</p><div class="rating-actions"><button class="web-button" id="skip-rating">skip</button><button class="web-button primary" id="save-rating" disabled>save rating</button></div></div>`);
   wireHome();let selected=drawing.myVote || 0, imageReady=false, votePending=false;
   const ratingImage=panel.querySelector('.rating-drawing');
   const stars=panel.querySelector('.star-picker');
@@ -339,11 +340,11 @@ function renderRating(){
     panel.querySelectorAll('.star-picker span').forEach((span,i)=>span.textContent=i<selected?'★':'☆');
     saveRating.textContent='update rating';
   }
-  ratingImage.onload=()=>{imageReady=true;stars.disabled=false;saveRating.disabled=!selected;ratingStatus.textContent=selected?`your rating: ${selected} stars`:'choose 1–5 stars';};
+  ratingImage.onload=()=>{imageReady=true;stars.disabled=false;saveRating.disabled=!selected;ratingStatus.textContent=selected?`your rating: ${counted(selected, 'star')}`:'choose 1–5 stars';};
   ratingImage.onerror=()=>{imageReady=false;stars.disabled=true;saveRating.disabled=true;ratingStatus.textContent='could not load this drawing. you can skip it.';};
   ratingImage.src=drawing.image;
   panel.querySelector('.rating-drawing').insertAdjacentHTML('beforebegin', authorMarkup(drawing));
-  panel.querySelectorAll('[name="stars"]').forEach(radio=>radio.onchange=()=>{if(!imageReady || votePending)return;selected=Number(radio.value);panel.querySelectorAll('.star-picker span').forEach((span,i)=>span.textContent=i<selected?'★':'☆');$('#save-rating').disabled=false;$('#rating-status').textContent=`${selected} stars selected`;});
+  panel.querySelectorAll('[name="stars"]').forEach(radio=>radio.onchange=()=>{if(!imageReady || votePending)return;selected=Number(radio.value);panel.querySelectorAll('.star-picker span').forEach((span,i)=>span.textContent=i<selected?'★':'☆');$('#save-rating').disabled=false;$('#rating-status').textContent=`${counted(selected, 'star')} selected`;});
   $('#skip-rating').textContent=directRating?'back to drawing':'skip';
   $('#skip-rating').onclick=()=>{if(votePending)return;if(directRating){route(drawing.url);showDrawing(drawing);return;}ratingSkips.add(drawing.id);queueIndex++;renderRating();};
   $('#save-rating').onclick=async()=>{
@@ -361,7 +362,7 @@ async function openArchive(){
   showLoading('gallery');
   try{
     const days=await viewApi('/api/archive');if(generation!==viewGeneration)return;
-    show(title('gallery','home')+`<div class="gallery-actions"><button class="web-button primary" id="gallery-rate">rate drawings</button></div><div class="archive-grid">${days.length?days.map(day=>`<button class="archive-card prompt-card" data-date="${escape(day.date)}"><img src="${escape(day.image)}" alt="drawing for ${escape(day.prompt)}" loading="lazy" decoding="async"><span>${escape(day.prompt)}</span><small><time class="display-date">${escape(formatPromptDate(day.date))}</time> · ${day.count} drawings</small></button>`).join(''):'<p>no drawings yet. yours could be the first.</p>'}</div>`);wireHome();
+    show(title('gallery','home')+`<div class="gallery-actions"><button class="web-button primary" id="gallery-rate">rate drawings</button></div><div class="archive-grid">${days.length?days.map(day=>`<button class="archive-card prompt-card" data-date="${escape(day.date)}"><img src="${escape(day.image)}" alt="drawing for ${escape(day.prompt)}" loading="lazy" decoding="async"><span>${escape(day.prompt)}</span><small><time class="display-date">${escape(formatPromptDate(day.date))}</time> · ${counted(day.count, 'drawing')}</small></button>`).join(''):'<p>no drawings yet. yours could be the first.</p>'}</div>`);wireHome();
     $('#gallery-rate').onclick=()=>startRating();
     panel.querySelectorAll('[data-date]').forEach(button=>button.onclick=()=>gallery(button.dataset.date));
   }catch(error){if(generation===viewGeneration)errorScreen(error);}

@@ -2,6 +2,8 @@ import { readFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import { drawingIdFromPath, drawingPath } from '../src/drawing-links.js';
 import { formatPromptDate } from '../src/prompts.js';
+import { drawingCaption } from '../src/text-format.js';
+import { renderPageShell } from './page-shell.mjs';
 
 const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const dateValid = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
@@ -48,7 +50,7 @@ export function socialImage() {
 const defaults = {
   drawing: async id => (await import('./social-data.mjs')).socialDrawing(id),
   prompt: async date => (await import('./social-data.mjs')).socialPrompt(date),
-  html: file => readFile(new URL('../' + file, import.meta.url), 'utf8'),
+  html: renderPageShell,
 };
 
 export async function handlePublicPage(req, res, url, dependencies = {}) {
@@ -84,7 +86,7 @@ export async function handlePublicPage(req, res, url, dependencies = {}) {
       if (!row) throw Object.assign(new Error('not found'), { status: 404 });
       const author = row.name || 'someone';
       meta = { path: drawingPath(row.id, row.prompt),
-        title: `${author} drew a ${row.prompt}`,
+        title: drawingCaption(row.name, row.prompt),
         description: `“${row.prompt}” by ${author}, drawn on ${formatPromptDate(row.date)}. View and rate this drawing on sketchlet.` };
     } else if (date) {
       if (!dateValid(date)) throw Object.assign(new Error('not found'), { status: 404 });

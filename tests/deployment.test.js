@@ -4,6 +4,7 @@ import { Readable } from 'node:stream';
 import { readFile } from 'node:fs/promises';
 import { readJson, allowedOrigins } from '../backend/http.mjs';
 import { PUBLIC_FILES, publicFile } from '../backend/public-files.mjs';
+import { PAGE_FILES, renderPageShell } from '../backend/page-shell.mjs';
 import { MAX_REQUEST_BYTES, submissionFits } from '../src/upload-limits.js';
 
 test('local streams and Vercel parsed bodies accept the same JSON', async () => {
@@ -35,19 +36,22 @@ test('origins permit exact deployment URLs without allowing arbitrary Vercel sit
 });
 test('published assets exist and their relative imports remain public',async()=>{
   for(const file of PUBLIC_FILES){
-    const source=await readFile(new URL(`../${file}`,import.meta.url),'utf8');
+    const source=renderPageShell(file) ?? await readFile(new URL(`../${file}`,import.meta.url),'utf8');
     assert.equal(publicFile('/'+file),file);
     if(file.endsWith('.js'))for(const match of source.matchAll(/from\s+['"](\.[^'"]+)['"]/g)){
       const path=new URL(match[1],`https://sketchlet.test/${file}`).pathname;
       assert.ok(publicFile(path),`${file} imports unpublished ${path}`);
     }
   }
-  const html=await readFile(new URL('../index.html',import.meta.url),'utf8');
-  for(const match of html.matchAll(/<(?:link|script)\b[^>]*\b(?:href|src)=["'](\/[^"']+)["']/g)) {
-    assert.ok(publicFile(match[1]),`index.html references unpublished ${match[1]}`);
+  for(const file of PAGE_FILES) {
+    const html=renderPageShell(file);
+    for(const match of html.matchAll(/<(?:link|script)\b[^>]*\b(?:href|src)=["'](\/[^"']+)["']/g)) {
+      assert.ok(publicFile(match[1]),`${file} references unpublished ${match[1]}`);
+    }
   }
   for(const file of ['.env.local','.neon','backend/server.mjs','backend/api.mjs','docs/DESIGN.md','docs/DEPLOYMENT.md','scripts/correct-singing-kite.mjs','package-lock.json'])assert.equal(PUBLIC_FILES.includes(file),false);
   assert.equal(PUBLIC_FILES.includes('backend/social.mjs'),false);
+  assert.equal(publicFile('/backend/page-shell.mjs'),null);
 });
 test('deployment publishes only dist and routes drawing URLs to the app',async()=>{
   const config=JSON.parse(await readFile(new URL('../vercel.json',import.meta.url),'utf8'));
@@ -55,7 +59,7 @@ test('deployment publishes only dist and routes drawing URLs to the app',async()
   assert.ok(config.rewrites.some(rule=>rule.source==='/d/:id' && rule.destination==='/api/pages?__page=/d/:id'));
   assert.ok(config.rewrites.some(rule=>rule.source==='/gallery' && rule.destination==='/api/pages?__page=/gallery'));
   assert.ok(config.rewrites.some(rule=>rule.source==='/' && rule.destination==='/api/pages?__page=/'));
-  assert.ok(config.functions['api/pages.js'].includeFiles.includes('index.html'));
+  assert.equal(config.functions['api/pages.js'].includeFiles,'src/assets/favicon.svg');
   assert.equal(publicFile('/gallery'),'gallery.html');
   assert.equal(publicFile('/gallery/'),'gallery.html');
   assert.equal(publicFile('/gallery/private'),null);

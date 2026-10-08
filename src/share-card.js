@@ -1,9 +1,9 @@
 import { formatPromptDate } from './prompts.js';
 import { setCloseIcon } from './close-button.js';
+import { counted, drawingCaption } from './text-format.js';
 
 const WIDTH = 1200, HEIGHT = 920;
 const FONT = '"Unkempt", cursive';
-const caption = drawing => `${drawing.displayName || 'someone'} drew a ${drawing.prompt}`;
 
 function bevel(ctx, x, y, width, height, fill, inset = false) {
   ctx.fillStyle = fill; ctx.fillRect(x, y, width, height);
@@ -67,7 +67,7 @@ export async function createShareCard(drawing, { signal } = {}) {
     ctx.font = `400 30px ${FONT}`; ctx.fillStyle = '#493655'; ctx.textAlign = 'right';
     ctx.fillText(formatPromptDate(drawing.date), WIDTH - 56, 98); ctx.textAlign = 'left';
     ctx.fillStyle = '#6d4c86'; ctx.fillRect(28, 138, WIDTH - 56, 2); ctx.fillRect(28, 144, WIDTH - 56, 2);
-    text(ctx, caption(drawing), 56, 202, WIDTH - 112, 43, { bold: true });
+    text(ctx, drawingCaption(drawing.displayName, drawing.prompt), 56, 202, WIDTH - 112, 43, { bold: true });
     bevel(ctx, 56, 232, 600, 600, '#ffffff', true);
     const edge = 592, scale = Math.min(edge / image.naturalWidth, edge / image.naturalHeight);
     const iw = image.naturalWidth * scale, ih = image.naturalHeight * scale;
@@ -81,7 +81,7 @@ export async function createShareCard(drawing, { signal } = {}) {
     text(ctx, drawing.displayName || 'anonymous', 728, sectionTop(0) + 134, 384, 44, { bold: true, minimum: 22 });
     const rated = drawing.count > 0 && Number.isFinite(drawing.average);
     text(ctx, rated ? `${drawing.average.toFixed(1)} / 5` : 'not rated yet', 728, sectionTop(1) + 96, 384, rated ? 64 : 42, { bold: true });
-    text(ctx, `${drawing.count || 0} ${drawing.count === 1 ? 'rating' : 'ratings'}`, 728, sectionTop(1) + 144, 384, 30);
+    text(ctx, counted(drawing.count || 0, 'rating'), 728, sectionTop(1) + 144, 384, 30);
     text(ctx, 'a little drawing every day', 728, sectionTop(2) + 84, 384, 32, { bold: true });
     text(ctx, location.host, 728, sectionTop(2) + 134, 384, 29, { bold: true });
     ctx.restore();
@@ -98,7 +98,7 @@ export function openShareCard(drawing, trigger) {
   dialog.innerHTML = '<div class="share-card-heading"><h2 id="share-card-title">share card</h2><button class="web-button" data-close aria-label="close share card">close</button></div><p class="share-card-status" role="status">creating your card…</p><img class="share-card-preview" hidden><div class="share-card-actions"><button class="web-button primary" data-copy disabled>copy image</button><a class="web-button" data-download hidden>download png</a><button class="web-button" data-retry hidden>try again</button></div>';
   setCloseIcon(dialog.querySelector('[data-close]'));
   const preview = dialog.querySelector('img');
-  preview.alt = `sketchlet card: ${caption(drawing)}, ${formatPromptDate(drawing.date)}`;
+  preview.alt = `sketchlet card: ${drawingCaption(drawing.displayName, drawing.prompt)}, ${formatPromptDate(drawing.date)}`;
   const status = dialog.querySelector('[role="status"]');
   const copy = dialog.querySelector('[data-copy]');
   const download = dialog.querySelector('[data-download]');

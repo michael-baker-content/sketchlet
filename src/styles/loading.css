@@ -2,7 +2,7 @@
 html.page-loading { overflow: hidden; background: #f5f2fc; }
 .page-loading body { background: #f5f2fc; }
 .page-loading body > :not(#page-loader):not(script) { visibility: hidden; opacity: 0; pointer-events: none; }
-body > header, body > main { transition: opacity 150ms ease-out; }
+body > header, body > main, body > footer { transition: opacity 150ms ease-out; }
 .page-loading #page-loader {
   display: grid; position: fixed; inset: 0; z-index: 10000;
   align-content: center; justify-items: center; gap: 12px;
@@ -15,5 +15,5 @@ body > header, body > main { transition: opacity 150ms ease-out; }
 .loading-stalled .loading-sketch path { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .loading-sketch path { animation: none; }
-  body > header, body > main { transition: none; }
+  body > header, body > main, body > footer { transition: none; }
 }

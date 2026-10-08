@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { publicFile } from '../../backend/public-files.mjs';
+import { renderPageShell } from '../../backend/page-shell.mjs';
 import { drawingPath } from '../../src/drawing-links.js';
 
 const id = '12345678-1234-1234-1234-123456789abc';
@@ -55,7 +56,7 @@ async function fixture(page, overrides = {}, { emptyDraft = false } = {}) {
     if (url.pathname in data) return route.fulfill({ json: data[url.pathname] });
     const file = publicFile(url.pathname);
     if (!file) return route.fulfill({ status: 404, body: 'not found' });
-    const body = await readFile(new URL('../../' + file, import.meta.url));
+    const body = renderPageShell(file) ?? await readFile(new URL('../../' + file, import.meta.url));
     const contentType = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css' }[extname(file)];
     return route.fulfill({ body, contentType });
   });
@@ -183,6 +184,34 @@ test('incremental pencil matches replay pixels over texture, after recovery and 
   });
   expect(results.failures).toEqual([]);
   expect(results.incrementalGrains).toBeLessThan(results.replayGrains / 4);
+});
+
+test('shared footer follows page content, aligns with the header, and stays out of full-screen drawing', async ({ page }) => {
+  await fixture(page);
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height:900 });
+    for (const path of ['/', '/gallery', '/gallery?date=' + drawing.date, drawingPath(id, drawing.prompt)]) {
+      await page.goto(path);
+      await expect(page.locator('#page-loader')).toBeHidden();
+      const footer = page.locator('body > footer');
+      await expect(page.locator('footer')).toHaveCount(1);
+      await expect(footer).toBeVisible();
+      await expect(footer).toContainText('one drawing per day · final once saved');
+      const header = await page.locator('.site-header').boundingBox();
+      const bounds = await footer.boundingBox();
+      const main = await page.locator('main').boundingBox();
+      expect(bounds.x).toBeCloseTo(header.x, 1);
+      expect(bounds.width).toBeCloseTo(header.width, 1);
+      expect(bounds.y).toBeGreaterThanOrEqual(main.y + main.height);
+    }
+  }
+  await page.setViewportSize({ width:320, height:650 });
+  await page.goto('/');
+  await expect(page.locator('#review-drawing')).toBeEnabled();
+  await page.locator('.focus-launch').click();
+  await expect(page.locator('footer')).toBeHidden();
+  await page.locator('.drawing-focus .close-button').click();
+  await expect(page.locator('footer')).toBeVisible();
 });
 
 test('gallery reload never requests the editor or today, even when today is unavailable', async ({ page }) => {
@@ -369,6 +398,100 @@ test('320 by 650 touch workspace fits controls and draws upward from the extra s
   expect(pixel).toEqual([52,48,68,255]);
   await expect(page.locator('#undo')).toBeEnabled();
   expect(await page.locator('.drawing-focus').evaluate(el => el.scrollHeight <= el.clientHeight)).toBe(true);
+});
+
+test('drawing dropdowns preserve their surfaces and accessible color menus across layouts', async ({ page }) => {
+  await fixture(page);
+  await page.setViewportSize({ width:1280, height:900 });
+  await page.goto('/');
+  await expect(page.locator('#review-drawing')).toBeEnabled();
+  const expectDropdown = async (control, height) => {
+    await expect(control).toBeVisible();
+    await expect(control).toHaveCSS('height', `${height}px`);
+    await expect(control).toHaveCSS('background-color', 'rgb(248, 244, 252)');
+    await expect(control).toHaveCSS('border-top-style', 'inset');
+    await expect(control).toHaveCSS('border-top-width', '3px');
+    await expect(control).toHaveCSS('border-radius', '0px');
+    await expect(control).toHaveCSS('font-size', '16px');
+  };
+  await expectDropdown(page.locator('#brush-style'), 46);
+  await expectDropdown(page.locator('#brush-shape'), 46);
+  for (const paletteId of ['palette', 'background-palette']) {
+    const picker = page.locator('.color-picker').filter({ has:page.locator(`#${paletteId}`) });
+    const summary = picker.locator('summary');
+    await summary.click();
+    const palette = picker.locator('.palette');
+    await expect(palette).toBeVisible();
+    await expect(palette).toHaveCSS('width', '280px');
+    await expect(palette).toHaveCSS('background-color', 'rgb(213, 208, 217)');
+    await expect(palette.locator('.swatch').first()).toHaveCSS('height', '44px');
+    await expect(palette.locator('.swatch.selected')).toHaveCSS('outline-style', 'dotted');
+    await summary.press('Escape');
+    await expect(palette).toBeHidden();
+    await expect(summary).toBeFocused();
+  }
+  await page.setViewportSize({ width:320, height:650 });
+  for (const fullscreen of [false, true]) {
+    if (fullscreen) await page.locator('.focus-launch').click();
+    const container = page.locator(fullscreen ? '.drawing-focus' : '.mobile-sketch-tools');
+    for (const name of ['tool', 'size', 'shape', 'style']) {
+      await expectDropdown(container.locator(`[data-focus="${name}"]`), 44);
+    }
+    for (const name of ['color', 'background']) {
+      const button = container.locator(`[data-color-menu="${name}"]`);
+      await expectDropdown(button, 44);
+      await button.click();
+      const menu = page.locator('.color-menu');
+      await expect(menu).toBeVisible();
+      const bounds = await menu.boundingBox();
+      expect(bounds.x).toBeGreaterThanOrEqual(0);
+      expect(bounds.y).toBeGreaterThanOrEqual(0);
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
+      expect(bounds.y + bounds.height).toBeLessThanOrEqual(650);
+      await menu.locator('[aria-pressed="true"]').click();
+      await expect(menu).toBeHidden();
+      await expect(button).toBeFocused();
+    }
+  }
+});
+
+test('cursor shapes retain hollow centers and contrasting drawing and erase outlines', async ({ page }) => {
+  await fixture(page);
+  await page.setViewportSize({ width:1280, height:900 });
+  await page.goto('/');
+  await expect(page.locator('#review-drawing')).toBeEnabled();
+  for (const tool of ['brush', 'eraser']) for (const shape of ['circle', 'square', 'rough']) {
+    await page.locator('#' + tool).click();
+    await page.locator('#brush-shape').selectOption(shape);
+    await page.locator('#canvas').hover();
+    const cursor = page.locator('.eraser-cursor');
+    await expect(cursor).toBeVisible();
+    const styles = await cursor.evaluate(el => {
+      const style = getComputedStyle(el), polygon = el.querySelector('polygon:last-child');
+      return { background:style.backgroundColor, border:style.borderTopColor, radius:style.borderRadius,
+        svgDisplay:getComputedStyle(el.querySelector('svg')).display,
+        fill:getComputedStyle(polygon).fill, stroke:getComputedStyle(polygon).stroke,
+        outline:getComputedStyle(el.querySelector('.cursor-outline')).stroke };
+    });
+    const color = tool === 'eraser' ? 'rgb(197, 46, 66)' : 'rgb(52, 48, 68)';
+    expect(styles.background).toBe('rgba(0, 0, 0, 0)');
+    if (shape === 'rough') {
+      expect(styles.svgDisplay).toBe('block');
+      expect(styles.fill).toBe('none'); expect(styles.stroke).toBe(color);
+      expect(styles.outline).toBe('rgb(255, 255, 255)');
+    } else {
+      expect(styles.svgDisplay).toBe('none'); expect(styles.border).toBe(color);
+      expect(styles.radius).toBe(shape === 'square' ? '0px' : '50%');
+    }
+    // The touch halo is independent of the footprint, but uses its tool color.
+    const halo = await cursor.evaluate(el => {
+      el.dataset.input = 'touch';
+      const style = getComputedStyle(el, '::after');
+      const result = { color:style.borderTopColor, width:style.width, fill:style.backgroundColor };
+      el.dataset.input = 'mouse'; return result;
+    });
+    expect(halo).toEqual({ color, width:'20px', fill:'rgba(0, 0, 0, 0)' });
+  }
 });
 
 test('landscape full-screen cutoff preserves the drawing, undo, and normal scrolling', async ({ page }) => {

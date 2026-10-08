@@ -78,15 +78,18 @@ Public page metadata is rendered server-side for social crawlers. All shared lin
 
 The main pieces are:
 
-- `src/studio.js`, `src/model.js`, and `src/brushes.js`: canvas, tools, undo, and draft storage.
+- `src/studio.js`, `src/model.js`, and `src/brushes.js`: canvas, tools, undo, and shared stroke-spacing rules.
+- `src/draft-storage.js`: shared access to date-scoped IndexedDB drafts for home startup and the editor.
 - `src/canvas-cache.js` and `src/pointer-input.js`: reuse rendered strokes and map batched pointer samples to canvas coordinates.
-- `index.html` and `src/home-page.js`: today's page; submission status is checked before loading an editor.
-- `gallery.html` and `src/gallery-page.js`: gallery and shared-drawing pages, independent of the editor and today's status request.
+- `backend/page-shell.mjs`: shared HTML template for two separate pages, generated as `dist/index.html` and `dist/gallery.html` during the build and rendered directly by the page server.
+- `src/home-page.js`: today's page; submission status is checked before loading an editor.
+- `src/gallery-page.js`: gallery and shared-drawing pages, independent of the editor and today's status request.
 - `src/editor.html` and `src/submission.js`: drawing markup and submission controls, loaded only for an unfinished day.
 - `src/gallery.js`: shared profile and community views, with page initialization explicitly called by each entry point.
 - `src/api-client.js` and `src/page-startup.js`: API requests and conditional home startup.
+- `src/text-format.js`: singular/plural count labels and creator captions shared by gallery text, share cards, and link metadata.
 - `backend/social.mjs`, `backend/social-data.mjs`, and `api/pages.js`: crawler-friendly page metadata and generated social preview images.
-- `src/styles/`: base styles, playful details, retro surfaces, and page layouts, loaded in that order.
+- `src/styles/`: base styles, playful details, retro surfaces, page layouts, and loading styles, loaded in that order. Dropdown surfaces and cursors are shared across drawing layouts.
 - `backend/` and `db/`: local server, API, validation, storage access, and database migrations.
 - `api/`, `scripts/`, and `vercel.json`: hosting, social-preview rendering, local development, and the public-file build.
 - `docs/`: design notes and deployment instructions.

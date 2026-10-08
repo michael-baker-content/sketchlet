@@ -31,6 +31,10 @@ test('home and gallery serve social metadata without cookies or database access'
     assert.match(result.body, /property="og:description" content="a little drawing every day"/);
     if (path === '/') assert.match(result.body, /<title>sketchlet - a little drawing every day<\/title>/);
     assert.match(result.body, path === '/' ? /src\/home-page.js/ : /src\/gallery-page.js/);
+    assert.doesNotMatch(result.body, path === '/' ? /src\/gallery-page.js/ : /src\/home-page.js/);
+    assert.equal((result.body.match(/<script type="module"/g) || []).length, 1);
+    assert.equal((result.body.match(/id="page-loader"/g) || []).length, 1);
+    assert.doesNotMatch(result.body, /\$\{page\./);
     assert.doesNotMatch(result.body, /<canvas|src="\/src\/studio.js"/);
     assert.equal(result.headers['Set-Cookie'], undefined);
   }

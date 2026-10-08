@@ -30,8 +30,7 @@ The canvas is square, with a 1200 × 1200 pixel export and support for mouse, to
 | color | 24 colors for both ink and background, from soft pastels to midnight, navy, and forest |
 | size | fine, mid, and bold |
 | shape | circle, square, and rough |
-| style | brush, dashed, dotted, marker, spray, and pencil |
-| drawing tools | the brush styles above, plus solid straight lines and connected-area fill |
+| drawing tools | brush, marker, pencil, spray, line, fill, dashed, dotted |
 | second thoughts | eraser, undo, redo, and an undoable clear |
 
 Shapes work across every brush style and the eraser. Marker strokes are translucent, pencil grain builds up as you draw over it, and spray scatters small shaped dots.
@@ -41,6 +40,8 @@ Choose **line** in drawing tools, drag to preview, and release to commit a solid
 Drawing and erasing follow your input without an added animation delay. The drawing workspace suppresses text selection and the canvas's long-press menu to keep gestures focused on drawing. Undo remembers up to 60 edits during the current session. **Ctrl/Cmd+Z** undoes; **Ctrl/Cmd+Shift+Z** redoes.
 
 Phones and tablets get compact dropdown tools. Full-screen mode puts the drawing workspace in charge: no page scrolling, no header, and no submission buttons in the way. Close it to return to the normal page with your canvas and history intact. Desktop works too.
+
+When drawing with a finger, the hollow cursor targets 24 screen pixels above your touch so you can see your mark. The narrow strip below the canvas lets you reach its bottom edge; it isn't part of your saved image. Mouse and stylus input stay directly under the pointer. Contrasting cursor outlines help on light and dark backgrounds.
 
 ## take a look around
 
@@ -111,7 +112,7 @@ Maintenance uses Node.js 22.20 or newer. Local credentials belong in `.env.local
 
 Stop the existing local server before restarting after backend changes. Run checks and a build before pushing; Vercel builds from source and does not run migrations. Credentials and generated build output stay out of Git.
 
-The browser checks in `checks/browser/` serve the real page assets through Playwright and replace API responses with fixtures. They need no running server or database, and cannot submit drawings or votes to Neon. Playwright is included in the locked dependencies; after `npm ci`, install its browser once with `npx playwright install chromium`. Each browser test runs in desktop and phone configurations, so its name appears twice.
+The browser checks in `checks/browser/` serve the real page assets through Playwright and replace API responses with fixtures. They need no running server or database, and cannot submit drawings or votes to Neon. Playwright is included in the locked dependencies; after `npm ci`, install its browser once with `npx playwright install chromium`. Browser tests run in desktop and phone configurations, so names appear twice. Touch-only cases are intentionally skipped in the desktop configuration.
 
 Drawing checks compare incremental pencil rendering against full replay pixel-for-pixel and verify reduced grain operations, pointer batching, and tool state across layouts. These guard correctness and repeated work; they do not measure real-phone responsiveness. See the [drawing release checks](docs/DEPLOYMENT.md#drawing-performance-release-checks) before assessing performance on a device.
 

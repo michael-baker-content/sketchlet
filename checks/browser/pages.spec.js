@@ -152,14 +152,14 @@ test('incremental pencil matches replay pixels over texture, after recovery and 
     const make = () => { const c = document.createElement('canvas'); c.width = c.height = 160; return c; };
     const draw = createBrushRenderer(make), failures = [];
     let replayGrains = 0, incrementalGrains = 0;
-    for (const shape of ['circle', 'square', 'rough']) for (const size of [5,14,32]) {
+    for (const pencilVersion of [undefined, 2]) for (const shape of ['circle', 'square', 'rough']) for (const size of [5,14,32]) {
       const base = make(), live = make(), reference = make();
       const b = base.getContext('2d'), l = live.getContext('2d'), r = reference.getContext('2d');
       const texture = { tool: 'brush', shape, size: 32, style: 'pencil', seed: 19, color: '#663399', points: [[20,20],[140,140],[20,140],[140,20]] };
       draw(b, texture);
       const strokes = [texture];
       const cache = createActivePencilCache(l, 160, draw);
-      const stroke = { ...texture, size, seed: 27, color: '#112233', points: [] };
+      const stroke = { ...texture, size, pencilVersion, seed: 27, color: '#112233', points: [] };
       const oldLiveFill = l.fillRect.bind(l), oldReplayFill = r.fillRect.bind(r);
       l.fillRect = (...args) => { incrementalGrains++; oldLiveFill(...args); };
       r.fillRect = (...args) => { replayGrains++; oldReplayFill(...args); };
@@ -335,7 +335,7 @@ test('coalesced drawing measures canvas once per event after layout changes', as
           clientX: rect.left + rect.width * (.2 + i / 100),
           clientY: rect.top + rect.height * (.2 + i / 100),
         }));
-        const event = new PointerEvent('pointermove', { ...samples.at(-1), pointerId: element.testPointerId, pointerType: 'mouse', isPrimary: true });
+        const event = new PointerEvent('pointermove', { ...samples.at(-1), pointerId: element.testPointerId, pointerType: 'mouse', isPrimary: true, bubbles: true });
         Object.defineProperty(event, 'getCoalescedEvents', { value: () => samples });
         element.dispatchEvent(event);
         return count;
@@ -346,6 +346,29 @@ test('coalesced drawing measures canvas once per event after layout changes', as
     await expect(page.locator('#undo')).toBeEnabled();
   }
   expect(errors).toEqual([]);
+});
+
+test('320 by 650 touch workspace fits controls and draws upward from the extra strip', async ({ page, isMobile }) => {
+  test.skip(!isMobile, 'requires touch input');
+  await fixture(page);
+  await page.setViewportSize({ width:320, height:650 });
+  await page.goto('/');
+  await expect(page.locator('#review-drawing')).toBeEnabled();
+  const normalTools = await page.locator('.mobile-sketch-tools').boundingBox();
+  expect(normalTools.y + normalTools.height).toBeLessThanOrEqual(650);
+  await page.locator('.focus-launch').click();
+  const tools = await page.locator('.drawing-focus .focus-tools').boundingBox();
+  expect(tools.y + tools.height).toBeLessThanOrEqual(650);
+  const canvas = page.locator('#canvas'), bounds = await canvas.boundingBox();
+  const strip = await page.locator('.touch-drawing-strip').boundingBox();
+  expect(strip.height).toBe(24);
+  const contactX = bounds.x + bounds.width / 2, contactY = strip.y + 12;
+  await page.touchscreen.tap(contactX, contactY);
+  const targetY = Math.round((contactY - 24 - bounds.y) / bounds.height * 1200);
+  const pixel = await canvas.evaluate((c,y) => Array.from(c.getContext('2d').getImageData(600,y,1,1).data), targetY);
+  expect(pixel).toEqual([52,48,68,255]);
+  await expect(page.locator('#undo')).toBeEnabled();
+  expect(await page.locator('.drawing-focus').evaluate(el => el.scrollHeight <= el.clientHeight)).toBe(true);
 });
 
 test('landscape full-screen cutoff preserves the drawing, undo, and normal scrolling', async ({ page }) => {

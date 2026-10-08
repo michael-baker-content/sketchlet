@@ -30,7 +30,8 @@ export function validDocument(doc) {
     : (
     ['brush', 'eraser'].includes(s.tool) &&
     (s.seed === undefined || (Number.isInteger(s.seed) && s.seed >= 0 && s.seed <= 0xffffffff)) &&
-    (s.sprayVersion === undefined || [2, 3].includes(s.sprayVersion)) &&
+    (s.sprayVersion === undefined || [2, 3, 4, 5].includes(s.sprayVersion)) &&
+    (s.pencilVersion === undefined || s.pencilVersion === 2) &&
     (s.shape === undefined ? (s.style === undefined || ['solid', 'dashed', 'rough'].includes(s.style)) : BRUSH_SHAPES.includes(s.shape) && (BRUSH_STYLES.includes(s.style) || (s.style === 'line' && s.tool === 'brush' && s.points?.length <= 2))) &&
     COLORS.some(c => c.value === s.color) && BRUSH_SIZES.includes(s.size) &&
     Array.isArray(s.points) && s.points.length > 0 && s.points.every(p => Array.isArray(p) && p.length === 2 && p.every(n => Number.isFinite(n) && n >= 0 && n <= CANVAS_SIZE)))));

@@ -1,6 +1,6 @@
 export const BRUSH_SHAPES = ['circle', 'square', 'rough'];
 export const BRUSH_STYLES = ['brush', 'dashed', 'dotted', 'marker', 'spray', 'pencil'];
-export const DRAWING_TOOLS = [...BRUSH_STYLES, 'fill', 'line'];
+export const DRAWING_TOOLS = ['brush', 'marker', 'pencil', 'spray', 'line', 'fill', 'dashed', 'dotted'];
 const roughRadii = [.96, .73, 1, .78, .94, .7, .98, .8, .91];
 export const roughVertices = roughRadii.map((radius, index) => {
   const angle = index / roughRadii.length * Math.PI * 2;
@@ -109,7 +109,7 @@ export function createBrushRenderer(makeCanvas) {
   return function draw(context, stroke, samples) {
     const erasing = stroke.tool === 'eraser';
     const style = erasing ? 'brush' : stroke.style;
-    const lightSpray = style === 'spray' && stroke.sprayVersion === 3;
+    const lightSpray = style === 'spray' && stroke.sprayVersion >= 3;
     const spacing = style === 'dotted' ? stroke.size * 1.8 : style === 'spray' ? Math.max(1, stroke.size * (lightSpray ? .45 : .3)) : Math.max(.75, stroke.size * .12);
     context.save();
     context.globalCompositeOperation = erasing ? 'destination-out' : 'source-over';
@@ -121,7 +121,7 @@ export function createBrushRenderer(makeCanvas) {
         stamp(context, stroke.shape, sample.x, sample.y, stroke.size / 2);
         context.clip();
         for (const grain of pencilParticles(sample, stroke.shape, stroke.size, stroke.seed)) {
-          context.globalAlpha = grain.alpha;
+          context.globalAlpha = grain.alpha * (stroke.pencilVersion === 2 ? 1.35 : 1);
           context.fillRect(grain.x - grain.width / 2, grain.y - grain.width / 2, grain.width, grain.width);
         }
         context.restore();
@@ -129,7 +129,7 @@ export function createBrushRenderer(makeCanvas) {
       context.restore(); return;
     }
     // Unseeded pencil strokes retain the old paper texture in existing drafts.
-    context.globalAlpha = style === 'marker' ? .32 : style === 'spray' ? (lightSpray ? .2 : .48) : 1;
+    context.globalAlpha = style === 'marker' ? .32 : style === 'spray' ? (stroke.sprayVersion === 5 ? .4 : lightSpray ? .2 : .48) : 1;
     context.fillStyle = style === 'pencil' ? pencilTexture(context, stroke.color) : stroke.color;
     context.beginPath();
     for (const sample of strokeSamples(stroke.points, spacing)) {
@@ -137,7 +137,7 @@ export function createBrushRenderer(makeCanvas) {
       if (style === 'spray') {
         const shapedDots = stroke.sprayVersion >= 2;
         const radius = shapedDots ? ({ 5: 1.5, 14: 3, 32: 5 }[stroke.size] / 2) : Math.max(.45, stroke.size * .025);
-        for (const [x, y] of sprayParticles(sample, stroke.shape, stroke.size, lightSpray ? 3 : 10)) {
+        for (const [x, y] of sprayParticles(sample, stroke.shape, stroke.size, stroke.sprayVersion >= 4 ? 4 : lightSpray ? 3 : 10)) {
           stamp(context, shapedDots ? stroke.shape : 'circle', x, y, radius);
         }
       } else stamp(context, stroke.shape, sample.x, sample.y, stroke.size / 2);

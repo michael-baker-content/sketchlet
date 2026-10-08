@@ -101,6 +101,8 @@ Localhost and the hosted domain have different browser storage and guest cookies
 
 ### Drawing performance release checks
 
+For the current touch and brush update, verify the 24px upward finger target and bottom drawing strip in normal and full-screen views, including line and fill. Mouse and pen should remain direct. The 320×650 phone regression checks control visibility and bottom-edge drawing; its desktop counterpart is intentionally skipped. Try the stronger pencil and 40%-opacity spray on the actual phone, then reload an older draft to confirm its appearance is preserved. No migration, dependency installation, or environment changes are required.
+
 The refactor retains the 1200×1200 canvas, 60-edit undo history, and existing draft format. Completed strokes are cached; seeded pencil strokes append new grain without an additional canvas buffer. Other brush styles preserve their existing single-fill behavior.
 
 After automated checks pass, use the affected phone to try layered pencil shading over a texture, a long regular-brush stroke, and erasing across overlapping strokes. Check that releasing a stroke, undo/redo, refreshing a saved draft, and switching normal/full-screen views preserve its appearance. Watch for disappearing strokes, altered pixels, or increasing input lag. Browser tests use simulated phone dimensions, not physical phone hardware, and operation counts are not frame-time benchmarks.

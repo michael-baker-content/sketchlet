@@ -53,10 +53,9 @@ export async function createShareCard(drawing, { signal } = {}) {
     for (let y = 0; y < HEIGHT; y += 8) for (let x = 0; x < WIDTH; x += 8) {
       if ((x / 8 + y / 8) % 2 === 0) ctx.fillRect(x, y, 8, 8);
     }
-    // Keep essential content inside the central square, with extra breathing
-    // room for messaging previews that crop the sides or round their corners.
+    // Leave breathing room around the content for messaging previews.
     // The PNG dimensions stay unchanged; only decorative checks reach its edges.
-    const contentScale = .7;
+    const contentScale = .85;
     ctx.save();
     ctx.translate(WIDTH * (1 - contentScale) / 2, HEIGHT * (1 - contentScale) / 2);
     ctx.scale(contentScale, contentScale);
@@ -74,15 +73,17 @@ export async function createShareCard(drawing, { signal } = {}) {
     const iw = image.naturalWidth * scale, ih = image.naturalHeight * scale;
     ctx.drawImage(image, 60 + (edge - iw) / 2, 236 + (edge - ih) / 2, iw, ih);
     bevel(ctx, 696, 232, 448, 600, '#e7d9f5');
-    text(ctx, 'drawn by', 728, 286, 384, 27);
-    text(ctx, drawing.displayName || 'anonymous', 728, 340, 384, 44, { bold: true, minimum: 22 });
-    ctx.fillStyle = '#b39adb'; ctx.fillRect(728, 374, 384, 2);
+    const sectionHeight = 600 / 3;
+    const sectionTop = index => 232 + index * sectionHeight;
+    ctx.fillStyle = '#b39adb';
+    for (const index of [1, 2]) ctx.fillRect(728, sectionTop(index), 384, 2);
+    text(ctx, 'drawn by', 728, sectionTop(0) + 80, 384, 27);
+    text(ctx, drawing.displayName || 'anonymous', 728, sectionTop(0) + 134, 384, 44, { bold: true, minimum: 22 });
     const rated = drawing.count > 0 && Number.isFinite(drawing.average);
-    text(ctx, rated ? `${drawing.average.toFixed(1)} / 5` : 'not rated yet', 728, 452, 384, rated ? 64 : 42, { bold: true });
-    text(ctx, `${drawing.count || 0} ${drawing.count === 1 ? 'rating' : 'ratings'}`, 728, 500, 384, 30);
-    text(ctx, 'ratings when shared', 728, 540, 384, 23, { color: '#594a64' });
-    text(ctx, 'a little drawing every day', 728, 700, 384, 32, { bold: true });
-    text(ctx, location.host, 728, 790, 384, 29, { bold: true });
+    text(ctx, rated ? `${drawing.average.toFixed(1)} / 5` : 'not rated yet', 728, sectionTop(1) + 96, 384, rated ? 64 : 42, { bold: true });
+    text(ctx, `${drawing.count || 0} ${drawing.count === 1 ? 'rating' : 'ratings'}`, 728, sectionTop(1) + 144, 384, 30);
+    text(ctx, 'a little drawing every day', 728, sectionTop(2) + 84, 384, 32, { bold: true });
+    text(ctx, location.host, 728, sectionTop(2) + 134, 384, 29, { bold: true });
     ctx.restore();
     return await new Promise((resolve, reject) => canvas.toBlob(blob => {
       if (blob) resolve(blob); else reject(new Error('could not create the card. please try again.'));

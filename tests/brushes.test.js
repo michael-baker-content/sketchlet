@@ -4,6 +4,26 @@ import { BRUSH_SHAPES, BRUSH_STYLES, strokeSamples, createStrokeSampler, sprayPa
 import { validDocument, restoreDraft, History } from '../src/model.js';
 
 const stroke = { tool: 'brush', color: '#343044', size: 14, points: [[20, 20], [100, 20]] };
+test('stronger pencil and spray preserve old strokes and survive draft restoration', () => {
+  const alphas = [], dots = [];
+  const context = { save() {}, restore() {}, beginPath() {}, moveTo() {}, clip() {}, fill() {},
+    arc(...args) { dots.push(args); }, fillRect() { alphas.push(this.globalAlpha); } };
+  const draw = createBrushRenderer(() => {});
+  const pencil = { ...stroke, shape: 'circle', style: 'pencil', seed: 7 };
+  draw(context, pencil);
+  const old = [...alphas]; alphas.length = 0;
+  draw(context, { ...pencil, pencilVersion: 2 });
+  assert.deepEqual(alphas, old.map(alpha => alpha * 1.35));
+  const spray = { ...stroke, shape: 'circle', style: 'spray', points: [[20,20]], sprayVersion: 4 };
+  dots.length = 0; draw(context, spray); assert.equal(dots.length, 4);
+  assert.equal(context.globalAlpha, .2);
+  const opaqueSpray = { ...spray, sprayVersion: 5 };
+  dots.length = 0; draw(context, opaqueSpray); assert.equal(dots.length, 4);
+  assert.equal(context.globalAlpha, .4);
+  dots.length = 0; draw(context, { ...spray, sprayVersion: 3 }); assert.equal(dots.length, 3);
+  const doc = { background: '#FFFFFF', strokes: [{ ...pencil, pencilVersion: 2 }, spray, opaqueSpray] };
+  assert.deepEqual(restoreDraft(JSON.parse(JSON.stringify({ day: '2026-10-07', document: doc })), '2026-10-07'), doc);
+});
 test('live sampling processes each segment once and matches complete-stroke sampling', () => {
   const points = [[20,20], [20,20], [20.1,20.2], [100,70], [20,20], [300,140]];
   for (const spacing of [.75, 1.68, 3.84]) {

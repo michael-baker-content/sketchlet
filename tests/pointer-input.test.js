@@ -2,6 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canvasPoint, appendPointerSamples } from '../src/pointer-input.js';
 
+test('finger targets sit 24 screen pixels above contact; pen and mouse stay direct', () => {
+  const rect = { left:0, top:0, width:300, height:300 };
+  for (const pointerType of ['mouse','pen']) assert.deepEqual(canvasPoint({ clientX:150, clientY:300, pointerType },rect,1200), [600,1200]);
+  assert.deepEqual(canvasPoint({ clientX:150, clientY:300, pointerType:'touch' },rect,1200), [600,1104]);
+  assert.deepEqual(canvasPoint({ clientX:150, clientY:324, pointerType:'touch' },rect,1200), [600,1200]);
+  const points = [[600,1000]];
+  appendPointerSamples(points, { pointerType:'touch', getCoalescedEvents:() => [{clientX:150,clientY:300}] },rect,1200);
+  assert.deepEqual(points.at(-1),[600,1104]);
+});
+
 test('pointer coordinates follow current canvas position and dimensions', () => {
   const event = { clientX: 110, clientY: 220 };
   assert.deepEqual(canvasPoint(event, { left: 10, top: 20, width: 400, height: 400 }, 1200), [300,600]);

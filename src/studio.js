@@ -4,10 +4,24 @@ import { fillRuns, drawFill } from './fill.js';
 import { openDraftDatabase, readDraft } from './draft-storage.js';
 import { createStrokeCache, createActivePencilCache, watchCanvasRecovery } from './canvas-cache.js';
 import { setCloseIcon } from './close-button.js';
-import { canvasPoint, appendPointerSamples } from './pointer-input.js';
+import { canvasPoint, appendPointerSamples, pointerPosition, TOUCH_OFFSET } from './pointer-input.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#canvas');
+const drawingSurface = document.createElement('div');
+drawingSurface.className = 'drawing-surface';
+drawingSurface.style.setProperty('--touch-offset', `${TOUCH_OFFSET}px`);
+$('#canvas-frame').before(drawingSurface);
+drawingSurface.append($('#canvas-frame'));
+const touchStrip = document.createElement('div');
+touchStrip.className = 'touch-drawing-strip'; touchStrip.setAttribute('aria-hidden', 'true');
+drawingSurface.append(touchStrip);
+const eventRects = new WeakMap();
+function inputRect(event) {
+  if (!event) return canvas.getBoundingClientRect();
+  if (!eventRects.has(event)) eventRects.set(event, canvas.getBoundingClientRect());
+  return eventRects.get(event);
+}
 const ctx = canvas.getContext('2d');
 const ink = document.createElement('canvas');
 ink.width = ink.height = CANVAS_SIZE;
@@ -35,7 +49,7 @@ let active = null, pointerId = null, ready = false, db = null, saveTimer, toastT
 let promptDay = null, saveQueue = Promise.resolve(), dayQueue = Promise.resolve();
 // Drawing gestures should never open an image menu or start a native drag.
 for (const type of ['contextmenu', 'dragstart', 'selectstart']) {
-  canvas.addEventListener(type, event => event.preventDefault());
+  drawingSurface.addEventListener(type, event => event.preventDefault());
 }
 const eraserCursor = document.createElement('div');
 eraserCursor.className = 'eraser-cursor';
@@ -45,34 +59,35 @@ eraserCursor.innerHTML = `<svg viewBox="0 0 100 100"><polygon points="${roughOut
 $('#canvas-frame').append(eraserCursor);
 let cursorPoint = null;
 function updateEraserCursor(event) {
-  if (event) cursorPoint = { x: event.clientX, y: event.clientY, type: event.pointerType };
-  // Ordinary drawing has no eraser overlay to measure or position.
-  if (tool !== 'eraser' || !cursorPoint) {
+  if (event) cursorPoint = { ...pointerPosition(event), type: event.pointerType };
+  if (!cursorPoint) {
     eraserCursor.classList.remove('visible');
-    canvas.style.cursor = tool === 'eraser' ? 'none' : 'crosshair';
+    canvas.style.cursor = 'none';
     return;
   }
-  const rect = canvas.getBoundingClientRect();
-  const visible = tool === 'eraser' && cursorPoint &&
+  const rect = inputRect(event);
+  const visible = cursorPoint &&
     cursorPoint.x >= rect.left && cursorPoint.x <= rect.right &&
     cursorPoint.y >= rect.top && cursorPoint.y <= rect.bottom &&
-    (cursorPoint.type !== 'touch' || active);
+    (cursorPoint.type !== 'touch' || active || event?.type === 'pointerdown');
   eraserCursor.classList.toggle('visible', !!visible);
-  eraserCursor.dataset.shape = brushShape;
-  canvas.style.cursor = tool === 'eraser' ? 'none' : 'crosshair';
+  const filling = tool === 'brush' && brushStyle === 'fill';
+  eraserCursor.dataset.shape = filling ? 'circle' : brushShape;
+  eraserCursor.dataset.tool = tool;
+  canvas.style.cursor = 'none';
   if (!visible) return;
-  eraserCursor.style.width = `${size / CANVAS_SIZE * rect.width}px`;
-  eraserCursor.style.height = `${size / CANVAS_SIZE * rect.height}px`;
+  eraserCursor.style.width = `${filling ? 10 : Math.max(3, size / CANVAS_SIZE * rect.width)}px`;
+  eraserCursor.style.height = `${filling ? 10 : Math.max(3, size / CANVAS_SIZE * rect.height)}px`;
   eraserCursor.style.left = `${canvas.offsetLeft + cursorPoint.x - rect.left}px`;
   eraserCursor.style.top = `${canvas.offsetTop + cursorPoint.y - rect.top}px`;
 }
-canvas.addEventListener('pointerenter', updateEraserCursor);
-canvas.addEventListener('pointermove', updateEraserCursor);
-canvas.addEventListener('pointerdown', event => requestAnimationFrame(() => updateEraserCursor(event)));
-for (const eventName of ['pointerup', 'pointercancel', 'lostpointercapture']) canvas.addEventListener(eventName, event => {
+drawingSurface.addEventListener('pointerenter', updateEraserCursor);
+drawingSurface.addEventListener('pointermove', updateEraserCursor);
+drawingSurface.addEventListener('pointerdown', updateEraserCursor);
+for (const eventName of ['pointerup', 'pointercancel', 'lostpointercapture']) drawingSurface.addEventListener(eventName, event => {
   if (event.pointerType === 'touch' || eventName === 'pointercancel') { cursorPoint = null; eraserCursor.classList.remove('visible'); }
 });
-canvas.addEventListener('pointerleave', () => { cursorPoint = null; eraserCursor.classList.remove('visible'); });
+drawingSurface.addEventListener('pointerleave', () => { cursorPoint = null; eraserCursor.classList.remove('visible'); });
 window.addEventListener('blur', () => { cursorPoint = null; eraserCursor.classList.remove('visible'); });
 new ResizeObserver(() => updateEraserCursor()).observe(canvas);
 document.addEventListener('scroll', () => { cursorPoint = null; eraserCursor.classList.remove('visible'); }, true);
@@ -232,12 +247,14 @@ for (const b of document.querySelectorAll('[data-size]')) b.onclick = () => sele
 $('#undo').onclick = () => { if (ready && !active && history.undo()) changed(); };
 $('#redo').onclick = () => { if (ready && !active && history.redo()) changed(); };
 $('#clear').onclick = () => { if (!ready || active || !history.document.strokes.length) return; history.commit({ ...history.document, strokes: [] }); changed(); toast('Fresh canvas. Undo brings your drawing back.'); };
-canvas.addEventListener('pointerdown', event => {
+drawingSurface.addEventListener('pointerdown', event => {
   if (!ready || active || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
+  const rect = inputRect(event), target = pointerPosition(event);
+  if (target.x < rect.left || target.x > rect.right || target.y < rect.top || target.y > rect.bottom) return;
   if (tool === 'brush' && brushStyle === 'fill') {
     event.preventDefault();
     if (!render()) { toast('canvas recovering. please try again.'); return; }
-    const [x, y] = canvasPoint(event, canvas.getBoundingClientRect(), CANVAS_SIZE);
+    const [x, y] = canvasPoint(event, rect, CANVAS_SIZE);
     try {
       const runs = fillRuns(ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE), x, y, color);
       if (!canvasAvailable()) { toast('canvas recovering. please try again.'); return; }
@@ -249,17 +266,20 @@ canvas.addEventListener('pointerdown', event => {
     return;
   }
   hideDraftStatus();
-  event.preventDefault(); pointerId = event.pointerId; canvas.setPointerCapture(pointerId);
-  active = { tool, color, size, style: tool === 'eraser' ? 'brush' : brushStyle, shape: brushShape, points: [canvasPoint(event, canvas.getBoundingClientRect(), CANVAS_SIZE)] };
-  if (tool === 'brush' && brushStyle === 'pencil') active.seed = crypto.getRandomValues(new Uint32Array(1))[0];
-  if (tool === 'brush' && brushStyle === 'spray') active.sprayVersion = 3;
+  event.preventDefault(); pointerId = event.pointerId; drawingSurface.setPointerCapture(pointerId);
+  active = { tool, color, size, style: tool === 'eraser' ? 'brush' : brushStyle, shape: brushShape, points: [canvasPoint(event, rect, CANVAS_SIZE)] };
+  if (tool === 'brush' && brushStyle === 'pencil') {
+    active.seed = crypto.getRandomValues(new Uint32Array(1))[0];
+    active.pencilVersion = 2;
+  }
+  if (tool === 'brush' && brushStyle === 'spray') active.sprayVersion = 5;
   render();
 });
 let frame = null;
-canvas.addEventListener('pointermove', event => {
+drawingSurface.addEventListener('pointermove', event => {
   if (!active || event.pointerId !== pointerId) return;
-  if (active.style === 'line') active.points[1] = canvasPoint(event, canvas.getBoundingClientRect(), CANVAS_SIZE);
-  else appendPointerSamples(active.points, event, canvas.getBoundingClientRect(), CANVAS_SIZE);
+  if (active.style === 'line') active.points[1] = canvasPoint(event, inputRect(event), CANVAS_SIZE);
+  else appendPointerSamples(active.points, event, inputRect(event), CANVAS_SIZE);
   if (frame === null) frame = requestAnimationFrame(() => { frame = null; render(); });
 });
 function finish(event) {
@@ -275,7 +295,7 @@ function finish(event) {
   history.commit({ ...history.document, strokes: [...history.document.strokes, active] });
   active = null; pointerId = null; changed();
 }
-canvas.addEventListener('pointerup', finish); canvas.addEventListener('pointercancel', finish); canvas.addEventListener('lostpointercapture', finish);
+drawingSurface.addEventListener('pointerup', finish); drawingSurface.addEventListener('pointercancel', finish); drawingSurface.addEventListener('lostpointercapture', finish);
 document.addEventListener('keydown', event => {
   if (!ready || active || event.altKey || canvas.closest('[hidden]')) return;
   // Text editing and secondary dialogs own their keyboard shortcuts.
@@ -487,7 +507,7 @@ syncToolViews = () => {
 syncToolViews();
 const canvasHome = document.createComment('canvas home');
 const historyHome = document.createComment('history home');
-const canvasFrame = $('#canvas-frame'), historyActions = $('.history-actions');
+const canvasFrame = drawingSurface, historyActions = $('.history-actions');
 canvasFrame.before(canvasHome); historyActions.before(historyHome);
 function arrangeNormalStudio() {
   if (focusView.open) return;
@@ -524,8 +544,10 @@ function sizeFocusView() {
     - headerHeight
     - focusView.querySelector('.focus-tools').offsetHeight
     - parseFloat(layout.rowGap) * (sharedHeader ? 2 : 3);
-  const edge = Math.max(0, Math.min(area.clientWidth, availableHeight) - 2);
-  canvasFrame.style.width = canvasFrame.style.height = `${edge}px`;
+  const stripHeight = touchStrip.getBoundingClientRect().height;
+  const edge = Math.max(0, Math.min(area.clientWidth, availableHeight - stripHeight) - 2);
+  canvasFrame.style.width = `${edge}px`;
+  canvasFrame.style.height = `${edge + stripHeight}px`;
 }
 new ResizeObserver(sizeFocusView).observe(focusView.querySelector('.focus-canvas'));
 window.visualViewport?.addEventListener('resize', sizeFocusView);

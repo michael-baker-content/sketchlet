@@ -35,4 +35,5 @@ export async function revealPage() {
     catch { throw new Error('could not load the drawing image. please try again.'); }
   }
   window.sketchletLoading?.finish();
+  document.dispatchEvent(new Event('sketchlet:page-ready'));
 }

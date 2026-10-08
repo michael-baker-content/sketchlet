@@ -6,7 +6,6 @@ const captureDraft = day => editor.captureDraft(day);
 let reviewedDraft = null;
 const bar = document.createElement('div'); bar.className='submit-bar'; bar.innerHTML='<div class="submit-actions"><div class="save-buttons"><button class="web-button primary" id="review-drawing" disabled>save to gallery</button></div></div><footer class="drawing-footer">one drawing per day · final once saved<br>new prompt at midnight eastern</footer>'; studio.after(bar);
 bar.hidden = true;
-bar.querySelector('.submit-actions').append($('#save-status'));
 // Keep the studio's existing PNG export handler when moving the download button.
 const downloadButton = $('#download');
 downloadButton.className = 'web-button';
@@ -15,6 +14,7 @@ downloadButton.setAttribute('aria-label', 'download drawing as PNG');
 downloadButton.hidden = false;
 downloadButton.disabled = true;
 bar.querySelector('.save-buttons').append(downloadButton);
+bar.querySelector('.save-buttons').append($('#save-status'));
 $('.download-note').hidden = true;
 const dialog = document.createElement('dialog'); dialog.className='submission-dialog';
 dialog.innerHTML='<form method="dialog"><h2>save to the gallery?</h2><p>your drawing will be visible to others and final for this prompt.</p><img alt="your drawing before submission"><p id="submission-error" role="alert"></p><div class="dialog-actions"><button class="web-button" value="cancel">keep drawing</button><button class="web-button primary" id="confirm-submit" type="button">save to gallery</button></div></form>';

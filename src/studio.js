@@ -57,8 +57,10 @@ eraserCursor.setAttribute('aria-hidden', 'true');
 const roughOutline = roughVertices.map(([x, y]) => `${50 + x * 48},${50 + y * 48}`).join(' ');
 eraserCursor.innerHTML = `<svg viewBox="0 0 100 100"><polygon points="${roughOutline}" class="cursor-outline"/><polygon points="${roughOutline}"/></svg>`;
 $('#canvas-frame').append(eraserCursor);
-let cursorPoint = null;
+let cursorPoint = null, touchContact = null;
 function updateEraserCursor(event) {
+  if (event?.type === 'pointerdown' && event.pointerType === 'touch' && event.isPrimary) touchContact = event.pointerId;
+  if (event && event.isPrimary === false) return;
   if (event) cursorPoint = { ...pointerPosition(event), type: event.pointerType };
   if (!cursorPoint) {
     eraserCursor.classList.remove('visible');
@@ -69,11 +71,12 @@ function updateEraserCursor(event) {
   const visible = cursorPoint &&
     cursorPoint.x >= rect.left && cursorPoint.x <= rect.right &&
     cursorPoint.y >= rect.top && cursorPoint.y <= rect.bottom &&
-    (cursorPoint.type !== 'touch' || active || event?.type === 'pointerdown');
+    (cursorPoint.type !== 'touch' || touchContact !== null);
   eraserCursor.classList.toggle('visible', !!visible);
   const filling = tool === 'brush' && brushStyle === 'fill';
   eraserCursor.dataset.shape = filling ? 'circle' : brushShape;
   eraserCursor.dataset.tool = tool;
+  eraserCursor.dataset.input = cursorPoint.type;
   canvas.style.cursor = 'none';
   if (!visible) return;
   eraserCursor.style.width = `${filling ? 10 : Math.max(3, size / CANVAS_SIZE * rect.width)}px`;
@@ -85,10 +88,12 @@ drawingSurface.addEventListener('pointerenter', updateEraserCursor);
 drawingSurface.addEventListener('pointermove', updateEraserCursor);
 drawingSurface.addEventListener('pointerdown', updateEraserCursor);
 for (const eventName of ['pointerup', 'pointercancel', 'lostpointercapture']) drawingSurface.addEventListener(eventName, event => {
+  if (event.pointerId === touchContact) touchContact = null;
+  if (event.isPrimary === false) return;
   if (event.pointerType === 'touch' || eventName === 'pointercancel') { cursorPoint = null; eraserCursor.classList.remove('visible'); }
 });
-drawingSurface.addEventListener('pointerleave', () => { cursorPoint = null; eraserCursor.classList.remove('visible'); });
-window.addEventListener('blur', () => { cursorPoint = null; eraserCursor.classList.remove('visible'); });
+drawingSurface.addEventListener('pointerleave', () => { if (touchContact !== null) return; cursorPoint = null; eraserCursor.classList.remove('visible'); });
+window.addEventListener('blur', () => { touchContact = null; cursorPoint = null; eraserCursor.classList.remove('visible'); });
 new ResizeObserver(() => updateEraserCursor()).observe(canvas);
 document.addEventListener('scroll', () => { cursorPoint = null; eraserCursor.classList.remove('visible'); }, true);
 
@@ -154,8 +159,22 @@ function syncControls() {
   for (const button of document.querySelectorAll('[data-background]')) { const selected = button.dataset.background === history.document.background; button.classList.toggle('selected', selected); button.setAttribute('aria-pressed', selected); }
   syncToolViews();
 }
-function hideDraftStatus() { $('#save-status').hidden = true; }
-function changed() { hideDraftStatus(); render(); syncControls(); scheduleSave(); }
+let statusTimer;
+export function showDraftStatus() {
+  clearTimeout(statusTimer);
+  const status = $('#save-status');
+  if (!status.getClientRects().length || getComputedStyle(status).visibility === 'hidden' || document.querySelector('.drawing-focus[open]')) return;
+  status.classList.remove('status-expired');
+  statusTimer = setTimeout(() => status.classList.add('status-expired'), 5000);
+}
+function setDraftStatus(message) {
+  const status = $('#save-status');
+  status.textContent = message; status.hidden = false;
+  status.classList.remove('status-expired');
+  showDraftStatus();
+}
+document.addEventListener('sketchlet:page-ready', showDraftStatus);
+function changed() { render(); syncControls(); scheduleSave(); }
 function selectTool(next) {
   if (!['brush', 'eraser'].includes(next)) return;
   tool = next;
@@ -208,7 +227,7 @@ document.addEventListener('click', event => { for (const picker of document.quer
 $('#brush').onclick = () => selectTool('brush'); $('#eraser').onclick = () => selectTool('eraser');
 document.querySelectorAll('.section-label h2').forEach((heading, index) => { heading.textContent = ['Tools', 'Color', 'Brush size', 'Background'][index]; });
 $('.studio-title').textContent = "today's prompt";
-$('#save-status').textContent = 'ready';
+setDraftStatus('ready');
 const editLabel = document.createElement('span');
 editLabel.className = 'history-label';
 editLabel.id = 'history-label';
@@ -265,7 +284,6 @@ drawingSurface.addEventListener('pointerdown', event => {
     } catch { toast('could not fill this area. please try again.'); }
     return;
   }
-  hideDraftStatus();
   event.preventDefault(); pointerId = event.pointerId; drawingSurface.setPointerCapture(pointerId);
   active = { tool, color, size, style: tool === 'eraser' ? 'brush' : brushStyle, shape: brushShape, points: [canvasPoint(event, rect, CANVAS_SIZE)] };
   if (tool === 'brush' && brushStyle === 'pencil') {
@@ -308,10 +326,10 @@ $('#download').onclick = () => {
   if (!render()) { toast('canvas recovering. please try again.'); return; }
   canvas.toBlob(blob => { if (!blob || !canvasAvailable()) { toast('Could not save the image. Please try again.'); return; } const url = URL.createObjectURL(blob); const link = document.createElement('a'); link.href = url; link.download = 'sketchlet.png'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 60000); toast('PNG downloaded.'); }, 'image/png');
 };
-function scheduleSave() { $('#save-status').textContent = 'saving…'; clearTimeout(saveTimer); saveTimer = setTimeout(() => persist(), 200); }
+function scheduleSave() { setDraftStatus('saving…'); clearTimeout(saveTimer); saveTimer = setTimeout(() => persist(), 200); }
 async function persist() {
   if (!promptDay) return;
-  if (!db) { $('#save-status').textContent = 'saving unavailable'; return; }
+  if (!db) { setDraftStatus('saving unavailable'); return; }
   // Capture the date and document together before any async work or day switch.
   const day = promptDay, record = { day, document: history.document };
   saveQueue = saveQueue.catch(() => {}).then(() => new Promise((resolve, reject) => {
@@ -319,15 +337,15 @@ async function persist() {
     tx.objectStore('drafts').put(record, draftKey(day));
     tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
   }));
-  try { await saveQueue; if (day === promptDay) $('#save-status').textContent = 'draft saved'; }
-  catch { $('#save-status').textContent = 'couldn’t save draft'; }
+  try { await saveQueue; if (day === promptDay) setDraftStatus('draft saved'); }
+  catch { if (day === promptDay) setDraftStatus('couldn’t save draft'); }
 }
 document.addEventListener('visibilitychange', () => { if (document.hidden && ready) { clearTimeout(saveTimer); persist(); } });
 window.addEventListener('pagehide', () => { if (ready) { clearTimeout(saveTimer); persist(); } });
 async function initialize() {
   try {
     db = await openDraftDatabase();
-  } catch { $('#save-status').textContent = 'saving unavailable'; }
+  } catch { setDraftStatus('saving unavailable'); }
   render(); syncControls();
 }
 render(); syncControls();
@@ -346,8 +364,8 @@ export function setPromptDay(day) {
     try {
       const saved = db ? await readDraft(db, day) : null;
       history = new History(restoreDraft(saved, day));
-      $('#save-status').textContent = !db ? 'saving unavailable' : saved?.day === day ? 'draft restored' : 'fresh canvas';
-    } catch { $('#save-status').textContent = 'saving unavailable'; }
+      setDraftStatus(!db ? 'saving unavailable' : saved?.day === day ? 'draft restored' : 'fresh canvas');
+    } catch { setDraftStatus('saving unavailable'); }
     ready = true; $('.toolbox').inert = false; render(); syncControls();
   });
   return dayQueue;
@@ -577,6 +595,7 @@ focusView.addEventListener('close', () => {
   document.documentElement.classList.remove('drawing-focused');
   document.body.style.removeProperty('top');
   arrangeNormalStudio();
+  showDraftStatus();
   window.scrollTo(0, focusScroll);
   (unsupportedFocusLayout.matches ? canvas : focusButton).focus({ preventScroll: true });
 });

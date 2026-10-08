@@ -269,3 +269,48 @@ main,.studio-body,.canvas-column,.toolbox,.tool-section,.daily-heading>*,.submis
 .eraser-cursor[data-tool="eraser"] { border-color:#c52e42; }
 .eraser-cursor[data-shape="rough"]>svg { fill:none; stroke:#343044; }
 .eraser-cursor[data-shape="rough"][data-tool="eraser"]>svg { stroke:#c52e42; }
+/* A separate touch target remains legible when the actual brush is only a few
+   screen pixels wide. The inner outline still represents the brush footprint. */
+.eraser-cursor[data-input="touch"]::after {
+  content:""; position:absolute; left:50%; top:50%;
+  width:20px; height:20px; transform:translate(-50%,-50%);
+  border:1px solid #343044; border-radius:50%;
+  box-shadow:0 0 0 2px #fff; background:transparent;
+}
+.eraser-cursor[data-input="touch"][data-tool="eraser"]::after { border-color:#c52e42; }
+
+/* Shared page edges: main's padding keeps the drawing panel slightly inset. */
+:root { --page-shell-width:1096px; --page-gutter:28px; }
+.site-header, footer { max-width:var(--page-shell-width); margin-inline:auto; }
+.site-header { width:100%; }
+main { max-width:var(--page-shell-width); }
+@media(max-width:760px), (min-width:761px) and (max-width:1100px) and (orientation:portrait) {
+  :root { --page-gutter:8px; }
+}
+.drawing-footer, main > footer {
+  width:calc(100% + var(--page-gutter) * 2);
+  max-width:var(--page-shell-width);
+  /* Auto margins on an oversized flex item resolve to zero, shifting it right.
+     Explicitly extend across both of main's gutters instead. */
+  margin-inline:calc(-1 * var(--page-gutter));
+  align-self:center;
+  flex-shrink:0;
+}
+/* Body's texture ends with its content; the root paints solid color below it. */
+html:has(.submit-bar:not([hidden])) { background:#e7d9f5; }
+body:has(.submit-bar:not([hidden])) main { padding-bottom:0; }
+
+.save-buttons { position:relative; }
+.submit-actions .save-status {
+  position:absolute; left:calc(100% + 10px); top:50%; transform:translateY(-50%);
+  width:140px; max-width:none; margin:0; pointer-events:none;
+  opacity:1; visibility:visible; transition:opacity 220ms ease, visibility 220ms;
+}
+.submit-actions .save-status.status-expired { opacity:0; visibility:hidden; }
+@media(max-width:600px) {
+  .submit-actions { padding-bottom:32px; }
+  .submit-actions .save-status { left:auto; right:0; top:calc(100% + 4px); transform:none; width:100%; justify-content:flex-end; text-align:right; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .submit-actions .save-status { transition:none; }
+}

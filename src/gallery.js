@@ -411,6 +411,7 @@ async function load() {
       return;
     }
     intro.hidden=false; panel.hidden=true; studio.hidden=false; editorUI.bar.hidden=false;
+    editor.showDraftStatus();
     document.title='sketchlet - a little drawing every day';
     return;
   }

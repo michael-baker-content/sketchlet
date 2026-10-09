@@ -1,6 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { canvasPoint, appendPointerSamples } from '../src/pointer-input.js';
+import { validDocument, restoreDraft } from '../src/model.js';
+
+test('extended strokes retain outside coordinates across sampling and draft restoration', () => {
+  const rect = { left:10,top:10,width:300,height:300 };
+  const points = [canvasPoint({clientX:5,clientY:160},rect,1200,true)];
+  assert.deepEqual(points,[[-20,600]]);
+  appendPointerSamples(points,{clientX:320,clientY:160},rect,1200,true);
+  const [x,y] = points.at(-1);
+  assert.ok(Math.abs(x - 1240) < 1e-9, 'outside x coordinate stays accurate to a fraction of a pixel');
+  assert.ok(Math.abs(y - 600) < 1e-9, 'outside y coordinate stays accurate to a fraction of a pixel');
+  const document = {background:'#FFFFFF',strokes:[{tool:'brush',style:'line',shape:'circle',size:14,color:'#343044',extended:true,points}]};
+  assert.equal(validDocument(document),true);
+  assert.deepEqual(restoreDraft({day:'2026-10-09',document},'2026-10-09'),document);
+  delete document.strokes[0].extended;
+  assert.equal(validDocument(document),false);
+});
 
 test('finger targets sit 24 screen pixels above contact; pen and mouse stay direct', () => {
   const rect = { left:0, top:0, width:300, height:300 };

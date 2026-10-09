@@ -3,6 +3,8 @@ import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { publicFile } from '../../backend/public-files.mjs';
 import { renderPageShell } from '../../backend/page-shell.mjs';
+import { handlePublicPage } from '../../backend/social.mjs';
+import { createAdminHandler } from '../../backend/admin-auth.mjs';
 import { drawingPath } from '../../src/drawing-links.js';
 
 const id = '12345678-1234-1234-1234-123456789abc';
@@ -52,6 +54,8 @@ async function fixture(page, overrides = {}, { emptyDraft = false } = {}) {
       '/api/profile': { displayName: 'tester' },
       '/api/profile/drawings': { drawings: [drawing], next: null },
       '/api/queue': [],
+      '/api/admin/reports': { items:[],next:null },
+      '/api/admin/drawings': { items:[],next:null },
     };
     if (url.pathname in data) return route.fulfill({ json: data[url.pathname] });
     const file = publicFile(url.pathname);
@@ -69,6 +73,87 @@ function expectNoEditor(requests) {
   expect(requests).not.toContain('/src/submission.js');
 }
 
+test('admin sign-in is separate from the guest site and remains disabled without configuration', async ({ page }) => {
+  let configured = false;
+  const { requests, errors } = await fixture(page, {
+    '/api/admin/status': route => route.fulfill({ json:{ configured, authenticated:false } }),
+  });
+  await page.goto('/admin');
+  await expect(page.getByRole('heading', { name:'administration', level:1 })).toBeVisible();
+  await expect(page.getByText('admin sign-in is not available yet.')).toBeVisible();
+  await expect(page.getByRole('button', { name:'sign in with github' })).toHaveCount(0);
+  configured = true;
+  await page.reload();
+  await expect(page.getByRole('button', { name:'sign in with github' })).toBeVisible();
+  await expect(page.locator('form')).toHaveAttribute('method', 'post');
+  await expect(page.locator('form')).toHaveAttribute('action', '/api/admin/login');
+  expectNoEditor(requests);
+  expect(requests).not.toContain('/api/today');
+  expect(requests).not.toContain('/api/profile');
+  expect(requests).not.toContain('/api/admin/activity');
+  expect(errors).toEqual([]);
+});
+
+test('admin form sends an acceptable origin with the real page response headers', async ({ page }) => {
+  let receivedOrigin, loginStatus, githubRedirect;
+  // Inject the browser fixture origin; real config only permits HTTP on localhost.
+  const config = { origin:'http://sketchlet.test', host:'sketchlet.test', secure:false, githubId:'123',
+    clientId:'test', clientSecret:'test', callback:'http://sketchlet.test/api/admin/callback' };
+  const handler = createAdminHandler({ getConfig:() => config, env:{},
+    getStore:async () => ({ limit:async () => true, saveState:async () => {} }) });
+  await fixture(page, {
+    '/admin': async route => {
+      let status, headers, body;
+      await handlePublicPage({ method:'GET' }, {
+        writeHead(code, values) { status=code; headers=values; }, end(value) { body=value; },
+      }, new URL(route.request().url()), { origin:'http://sketchlet.test' });
+      await route.fulfill({ status, headers, body });
+    },
+    '/api/admin/status': route => route.fulfill({ json:{ configured:true, authenticated:false } }),
+    '/api/admin/login': async route => {
+      const headers = await route.request().allHeaders(), responseHeaders = {};
+      receivedOrigin = headers.origin;
+      await handler({ method:route.request().method(), url:route.request().url(),
+        headers:{ ...headers, host:'sketchlet.test' }, socket:{ remoteAddress:'127.0.0.1' } }, {
+        setHeader(name,value) { responseHeaders[name]=value; },
+        getHeader(name) { return responseHeaders[name]; },
+        writeHead(status, values) { loginStatus=status; Object.assign(responseHeaders,values); }, end() {},
+      }, '/api/admin/login');
+      githubRedirect = responseHeaders.Location;
+      // Stop here: never navigate to GitHub or use a real database in this test.
+      await route.fulfill({ contentType:'text/html', body:'<h1>sign-in request received</h1>' });
+    },
+  });
+  await page.goto('/admin');
+  await page.getByRole('button', { name:'sign in with github' }).click();
+  await expect(page.getByRole('heading', { name:'sign-in request received' })).toBeVisible();
+  expect(receivedOrigin).toBe('http://sketchlet.test');
+  expect(loginStatus).toBe(303);
+  expect(new URL(githubRedirect).origin).toBe('https://github.com');
+});
+
+test('admin activity renders as text and sign-out clears the private view', async ({ page }) => {
+  let loggedIn = true, logoutRequest;
+  const { errors } = await fixture(page, {
+    '/api/admin/status': route => route.fulfill({ json:{ configured:true, authenticated:loggedIn, login:'artist', csrf:'test-csrf' } }),
+    '/api/admin/activity': route => route.fulfill({ json:{ actions:[{ actor_login:'<img src=x onerror=alert(1)>', action:'sign_in', created_at:'2026-10-08T12:00:00Z' }] } }),
+    '/api/admin/logout': route => {
+      logoutRequest = { method:route.request().method(), csrf:route.request().headers()['x-csrf-token'] };
+      loggedIn = false; return route.fulfill({ json:{ signedOut:true } });
+    },
+  });
+  await page.goto('/admin');
+  await expect(page.locator('#admin-activity li')).toContainText('<img src=x onerror=alert(1)>');
+  await expect(page.locator('#admin-activity img')).toHaveCount(0);
+  await page.getByRole('button', { name:'sign out', exact:true }).click();
+  await expect(page.getByRole('button', { name:'sign in with github' })).toBeVisible();
+  await expect(page.locator('#admin-activity')).toHaveCount(0);
+  expect(logoutRequest).toEqual({ method:'POST', csrf:'test-csrf' });
+  await page.reload();
+  await expect(page.locator('#admin-activity')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test('fresh day shows instructions and preloads without mounting the editor until begin', async ({ page }) => {
   const { errors } = await fixture(page, {}, { emptyDraft: true });
   await page.goto('/');
@@ -79,6 +164,79 @@ test('fresh day shows instructions and preloads without mounting the editor unti
   await page.locator('#begin-drawing').click();
   await expect(page.locator('#canvas')).toBeVisible();
   await expect(page.locator('#review-drawing')).toBeEnabled();
+  expect(errors).toEqual([]);
+});
+
+test('removed submission shows its reason without an editor, image, or sharing actions', async ({ page }) => {
+  const removed = { id,date:drawing.date,prompt:drawing.prompt,mine:true,removed:true,reason:'removed as spam.',url:'/' };
+  const { requests,errors } = await fixture(page, {
+    '/api/today':route => route.fulfill({ json:{ ...today,submission:removed } }),
+    '/api/profile/drawings':route => route.fulfill({ json:{ drawings:[removed],next:null } }),
+  });
+  await page.goto('/');
+  await expect(page.locator('#page-content')).toContainText('removed as spam.');
+  await expect(page.locator('#page-content')).toContainText('a replacement cannot be submitted');
+  await expect(page.locator('#begin-drawing,#copy-drawing-link,.finished-drawing,canvas')).toHaveCount(0);
+  await page.getByRole('button',{name:'profile',exact:true}).click();
+  await expect(page.locator('.profile-drawing-list')).toContainText('removed as spam.');
+  await expect(page.locator('.profile-drawing-list img')).toHaveCount(0);
+  expectNoEditor(requests);expect(errors).toEqual([]);
+});
+
+test('visitors can report a drawing without adding a profile name', async ({ page }) => {
+  let submitted;
+  const { errors,requests } = await fixture(page, {
+    ['/api/drawings/' + id]:route => route.fulfill({ json:{ ...drawing,mine:false } }),
+    [`/api/drawings/${id}/report`]:route => { submitted=route.request().postDataJSON();return route.fulfill({json:{reported:true}}); },
+  });
+  await page.goto(drawing.url);
+  await page.getByRole('button',{name:'report drawing',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'report drawing'});
+  await expect(dialog.getByRole('combobox',{name:'reason',exact:true})).toBeVisible();
+  await dialog.getByLabel('reason',{exact:true}).selectOption('spam');
+  await dialog.getByLabel('explanation (optional)').fill('please review this');
+  await dialog.getByRole('button',{name:'send report'}).click();
+  await expect(dialog.getByRole('status')).toContainText('ready for review');
+  expect(submitted).toEqual({category:'spam',explanation:'please review this'});
+  await dialog.getByRole('button',{name:'close',exact:true}).click();
+  await expect(page.getByRole('button',{name:'report drawing',exact:true})).toBeFocused();
+  expect(requests).not.toContain('/api/profile');expect(errors).toEqual([]);
+});
+
+test('admin review hides, restores, and resolves independently with private notes and CSRF', async ({ page }) => {
+  const writes=[];let visibility='public',resolved=false;
+  const {errors}=await fixture(page, {
+    '/api/admin/status':route => route.fulfill({json:{configured:true,authenticated:true,login:'artist',csrf:'review-csrf'}}),
+    '/api/admin/activity':route => route.fulfill({json:{actions:[]}}),
+    '/api/admin/reports':route => route.fulfill({json:{items:resolved?[]:[{id:'1',drawing_id:id,prompt:drawing.prompt,date:drawing.date,
+      display_name:'<img src=x>',category:'spam',explanation:'<script>bad</script>',status:'open',drawing_status:visibility}],next:null}}),
+    [`/api/admin/drawings/${id}/moderate`]:route => {
+      const body=route.request().postDataJSON();writes.push({body,csrf:route.request().headers()['x-csrf-token']});
+      visibility=body.action==='hide'?'hidden':'public';return route.fulfill({json:{saved:true}});
+    },
+    '/api/admin/reports/1/resolve':route => { resolved=true;return route.fulfill({json:{saved:true}}); },
+  });
+  await page.goto('/admin');
+  await expect(page.locator('.admin-review-card')).toContainText('<script>bad</script>');
+  await expect(page.locator('.admin-review-card script')).toHaveCount(0);
+  await page.getByRole('button',{name:'review drawing',exact:true}).click();
+  const dialog=page.getByRole('dialog',{name:'review drawing'});
+  await expect(dialog.getByRole('combobox',{name:'action',exact:true})).toBeVisible();
+  await dialog.getByLabel('removal reason (visible to creator)',{exact:true}).selectOption('spam');
+  await dialog.getByLabel('private note (optional)').fill('reviewed privately');
+  await dialog.getByRole('button',{name:'apply action'}).click();
+  await expect(dialog.getByRole('status')).toContainText('reports remain open');
+  await expect(page.locator('.admin-review-card')).toContainText('hidden');
+  expect(resolved).toBe(false);
+  expect(writes[0]).toEqual({body:{action:'hide',reason:'spam',note:'reviewed privately'},csrf:'review-csrf'});
+  await dialog.getByLabel('action',{exact:true}).selectOption('restore');
+  await dialog.getByRole('button',{name:'apply action'}).click();
+  await expect(page.locator('.admin-review-card')).toContainText('public');
+  await dialog.getByLabel('action',{exact:true}).selectOption('resolve');
+  await dialog.getByRole('button',{name:'apply action'}).click();
+  await expect(dialog.getByRole('status')).toHaveText('report resolved.');
+  await expect(page.locator('.admin-review-card')).toHaveCount(0);
+  await dialog.getByRole('button',{name:'close',exact:true}).click();
   expect(errors).toEqual([]);
 });
 
@@ -214,6 +372,67 @@ test('shared footer follows page content, aligns with the header, and stays out 
   await expect(page.locator('footer')).toBeVisible();
 });
 
+test('page headings, skip navigation, and profile dialogs support keyboard access', async ({ page }) => {
+  const { requests } = await fixture(page, {}, { emptyDraft:true });
+  for (const path of ['/', '/gallery', drawingPath(id, drawing.prompt)]) {
+    await page.goto(path);
+    await expect(page.locator('#page-loader')).toBeHidden();
+    const heading = page.getByRole('heading', { level:1 });
+    await expect(heading).toHaveCount(1);
+    await expect(heading).toBeFocused();
+    const skip = page.getByRole('link', { name:'skip to content' });
+    await skip.focus();
+    await expect(skip).toBeInViewport();
+    const apiCount = requests.filter(path => path.startsWith('/api/')).length;
+    // Wait for fragment traversal to dispatch before checking that no view reloads.
+    await page.evaluate(() => {
+      window.skipTraversal = new Promise(resolve => window.addEventListener('popstate', () => setTimeout(resolve, 0), { once:true }));
+    });
+    await page.keyboard.press('Enter');
+    await page.evaluate(() => window.skipTraversal);
+    await expect(page.getByRole('main')).toBeFocused();
+    expect(requests.filter(path => path.startsWith('/api/')).length).toBe(apiCount);
+    const profile = page.getByRole('button', { name:'profile', exact:true });
+    await profile.focus(); await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog', { name:'profile', exact:true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(profile).toBeFocused();
+  }
+});
+
+test('submission review has a name and returns keyboard focus after cancellation', async ({ page }) => {
+  await fixture(page);
+  await page.goto('/');
+  const save = page.locator('#review-drawing');
+  await expect(save).toBeEnabled();
+  await save.focus(); await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog', { name:'save “laughing kite”?' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(save).toBeFocused();
+});
+
+test('ratings can be selected and submitted using the keyboard without drawing', async ({ page }) => {
+  let vote;
+  const other = { ...drawing, mine:false };
+  await fixture(page, {
+    '/api/queue': route => route.fulfill({ json:[other] }),
+    ['/api/drawings/' + id + '/vote']: async route => {
+      vote = route.request().postDataJSON();
+      await route.fulfill({ json:{ ...other, myVote:vote.stars, count:1, average:vote.stars } });
+    },
+  });
+  await page.goto('/gallery?view=rate');
+  const first = page.getByRole('radio', { name:'1 star', exact:true });
+  await expect(first).toBeEnabled();
+  await first.focus(); await page.keyboard.press('Space'); await page.keyboard.press('ArrowRight');
+  await expect(page.getByRole('radio', { name:'2 stars', exact:true })).toBeChecked();
+  await page.getByRole('button', { name:'save rating', exact:true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name:'rating break', level:1 })).toBeVisible();
+  expect(vote).toEqual({ stars:2 });
+  await expect(page.locator('canvas')).toHaveCount(0);
+});
+
 test('gallery reload never requests the editor or today, even when today is unavailable', async ({ page }) => {
   const { requests, errors } = await fixture(page, { '/api/today': route => route.fulfill({ status: 503, json: { error: 'offline' } }) });
   for (let pass = 0; pass < 2; pass++) {
@@ -264,13 +483,16 @@ test('line preview and connected fill survive undo, redo and draft reload', asyn
   const canvas = page.locator('#canvas');
   await page.locator('[data-focus="style"]').selectOption('line');
   const box = await canvas.boundingBox();
-  await page.mouse.move(box.x + 1, box.y + box.height / 2);
+  await page.mouse.move(box.x - 5, box.y + box.height / 2);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 3);
-  await page.mouse.move(box.x + box.width - 1, box.y + box.height / 2);
+  await page.mouse.move(box.x + box.width + 5, box.y + box.height / 2);
   await page.mouse.up();
   const line = await canvas.evaluate(c => c.toDataURL());
+  expect(await canvas.evaluate(c => Array.from(c.getContext('2d').getImageData(0,600,1,1).data))).toEqual([52,48,68,255]);
   await page.locator('[data-focus="style"]').selectOption('fill');
+  await page.mouse.click(box.x - 5, box.y + box.height / 4);
+  expect(await canvas.evaluate(c => c.toDataURL())).toBe(line);
   await expect(page.locator('[data-focus="shape"]')).toBeDisabled();
   await expect(page.locator('[data-focus="size"]')).toBeDisabled();
   await page.locator('[data-color-menu="color"]').click();

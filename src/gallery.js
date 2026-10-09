@@ -7,6 +7,9 @@ import { drawingPath, drawingIdFromPath } from './drawing-links.js';
 export async function startPage({ page, today = null, editor = null, loadEditor = null, storageUnavailable = false }) {
 const $ = selector => document.querySelector(selector);
 const main = $('main');
+// Fragment links move focus within a view; only path/query changes load a view.
+const pageAddress = () => location.pathname + location.search;
+let navigationAddress = pageAddress();
 let studio = $('.studio'), intro = $('.intro');
 let editorUI = null;
 const panel = $('#page-content');
@@ -77,7 +80,8 @@ async function loadProfileDrawings(before = null) {
       const card = document.createElement('a');
       card.className = 'profile-drawing-card';
       card.href = drawing.url;
-      card.innerHTML = `<img src="${escape(drawing.image)}" alt="${escape(drawing.prompt)}" loading="lazy" decoding="async"><span><strong>${escape(drawing.prompt)}</strong><time class="display-date" datetime="${escape(drawing.date)}">${escape(formatPromptDate(drawing.date))}</time><small>${escape(ratingText(drawing))}</small></span>`;
+      card.innerHTML = `${drawing.removed ? '' : `<img src="${escape(drawing.image)}" alt="${escape(drawing.prompt)}" loading="lazy" decoding="async">`}<span><strong>${escape(drawing.prompt)}</strong><time class="display-date" datetime="${escape(drawing.date)}">${escape(formatPromptDate(drawing.date))}</time><small>${escape(drawing.removed ? drawing.reason : ratingText(drawing))}</small></span>`;
+      if (drawing.removed) card.onclick = event => { event.preventDefault(); nameDialog.close(); showDrawing(drawing); };
       list.append(card);
     }
     profileNext = result.next;
@@ -136,6 +140,7 @@ function openProfile(forRating = false) {
   $('#profile-photo-file').value = ''; $('#profile-photo-status').textContent = '';
   showProfilePhoto(); nameDialog.showModal();
   profileDrawings.hidden = forRating;
+  if (forRating) $('#profile-name').focus();
   if (!forRating) loadProfileDrawings();
 }
 nameButton.onclick = () => openProfile();
@@ -211,6 +216,7 @@ function header() {
   if (!intro) return;
   $('.prompt-date').textContent=formatPromptDate(state.date);
   $('.daily-heading h1').textContent=`"${state.prompt}"`;
+  if ($('#drawing-heading')) $('#drawing-heading').textContent=`today's prompt: "${state.prompt}"`;
   if ($('.studio-title')) $('.studio-title').textContent=`today's prompt: "${state.prompt}"`;
 }
 async function adoptDay(next) {
@@ -223,8 +229,17 @@ async function adoptDay(next) {
   return changed;
 }
 header();
-function show(content) { if(intro) intro.hidden=page==='gallery'; hideEditor(); panel.hidden=false; panel.innerHTML=content; const heading=panel.querySelector('h2'); if(heading){document.title=`${heading.textContent} — sketchlet`;heading.tabIndex=-1;heading.focus();} }
-function title(text, back = location.pathname.replace(/\/$/,'') === '/gallery' ? 'gallery' : 'home') { return `<div class="panel-title"><h2>${escape(text)}</h2><button class="web-button" id="back-home" data-return="${back}">${back === 'gallery' ? 'back to gallery' : 'back to today'}</button></div>`; }
+function show(content) {
+  if (intro) intro.hidden = true;
+  hideEditor(); panel.hidden = false; panel.innerHTML = content;
+  const heading = panel.querySelector('#page-heading');
+  if (heading) {
+    heading.tabIndex = -1;
+    document.title = `${heading.textContent} — sketchlet`;
+    heading.focus();
+  }
+}
+function title(text, back = location.pathname.replace(/\/$/,'') === '/gallery' ? 'gallery' : 'home') { return `<div class="panel-title"><h1 id="page-heading">${escape(text)}</h1><button class="web-button" id="back-home" data-return="${back}">${back === 'gallery' ? 'back to gallery' : 'back to today'}</button></div>`; }
 function wireHome() { const button=$('#back-home'); button.onclick=button.dataset.return==='gallery'?()=>{openArchive();}:home; }
 function errorScreen(error) {
   show(title('could not load')+`<div class="empty-state"><p>${escape(error.message)}</p><button class="web-button" id="retry-page">try again</button></div>`);
@@ -235,7 +250,7 @@ function showLoading(label) {
   if (intro) intro.hidden = true;
   hideEditor();
   panel.hidden = false;
-  panel.innerHTML = `<div class="panel-title"><h2>${escape(label)}</h2></div><div class="empty-state" role="status">loading…</div>`;
+  panel.innerHTML = `<div class="panel-title"><h1 id="page-heading">${escape(label)}</h1></div><div class="empty-state" role="status">loading…</div>`;
   document.title = `${label} — sketchlet`;
 }
 function hideEditor() { if (studio) studio.hidden=true; if (editorUI) editorUI.bar.hidden=true; }
@@ -249,12 +264,32 @@ function syncHeaderLinks() {
 }
 syncHeaderLinks();
 window.addEventListener('popstate', syncHeaderLinks);
-function route(path) { if(location.pathname+location.search!==path) window.history.pushState({},'',path); syncHeaderLinks(); }
+function route(path) {
+  if (pageAddress() !== path) window.history.pushState({}, '', path);
+  navigationAddress = pageAddress();
+  syncHeaderLinks();
+}
 function home() { window.location.assign('/'); }
+function addReportButton(drawing, container) {
+  if (drawing.mine || drawing.removed) return;
+  const button = document.createElement('button'); button.className = 'web-button'; button.type = 'button'; button.textContent = 'report drawing';
+  button.onclick = async () => {
+    button.disabled = true;
+    try { const { openReport } = await import('./report-dialog.js'); if (button.isConnected) openReport(drawing,button); }
+    catch { button.textContent = 'try reporting again'; }
+    finally { button.disabled = false; }
+  };
+  container.append(button);
+}
 function showDrawing(drawing) {
-  show(title(drawing.mine?'your drawing':drawing.prompt)+`<div class="submission-layout"><img class="finished-drawing" alt="${escape(drawing.prompt)}"><div class="submission-info"><h3>${escape(drawing.prompt)}</h3><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time></p><p class="rating-total">${escape(ratingText(drawing))}</p>${drawing.mine && today?`<div class="streak-box"><strong>${counted(state.streak, 'day')}</strong><span>drawing streak</span></div>`:''}<div class="drawing-actions"><button class="web-button" id="copy-drawing-link" type="button">copy link</button><button class="web-button" id="share-drawing-card" type="button">share card</button><button class="web-button primary" id="start-rating">rate drawings</button></div><p class="muted share-status" id="share-status" role="status"></p>${!drawing.mine && drawing.myVote?`<p>your rating: ${drawing.myVote} / 5</p>`:''}</div></div>`);
+  if (drawing.removed) {
+    show(title('your drawing') + `<div class="empty-state"><p>your drawing for “${escape(drawing.prompt)}” is not public.</p><p>${escape(drawing.reason)}</p><p>it still counts as your submission for ${escape(formatPromptDate(drawing.date))}. a replacement cannot be submitted.</p></div>`);
+    wireHome(); return;
+  }
+  show(title(drawing.mine?'your drawing':drawing.prompt)+`<div class="submission-layout"><img class="finished-drawing" alt="${escape(drawing.prompt)}"><div class="submission-info"><h2>${escape(drawing.prompt)}</h2><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time></p><p class="rating-total">${escape(ratingText(drawing))}</p>${drawing.mine && today?`<div class="streak-box"><strong>${counted(state.streak, 'day')}</strong><span>drawing streak</span></div>`:''}<div class="drawing-actions"><button class="web-button" id="copy-drawing-link" type="button">copy link</button><button class="web-button" id="share-drawing-card" type="button">share card</button><button class="web-button primary" id="start-rating">rate drawings</button></div><p class="muted share-status" id="share-status" role="status"></p>${!drawing.mine && drawing.myVote?`<p>your rating: ${drawing.myVote} / 5</p>`:''}</div></div>`);
   panel.querySelector('img').src=drawing.image;
-  panel.querySelector('.submission-info h3').insertAdjacentHTML('afterend', authorMarkup(drawing));
+  addReportButton(drawing,panel.querySelector('.drawing-actions'));
+  panel.querySelector('.submission-info h2').insertAdjacentHTML('afterend', authorMarkup(drawing));
   const copyButton = $('#copy-drawing-link'), shareStatus = $('#share-status');
   const shareUrl = new URL(drawingPath(drawing.id, drawing.prompt), location.origin).href;
   copyButton.onclick = async () => {
@@ -282,6 +317,7 @@ function showDrawing(drawing) {
   };
   if (location.pathname.startsWith('/d/')) {
     window.history.replaceState({}, '', drawingPath(drawing.id, drawing.prompt) + location.search);
+    navigationAddress = pageAddress();
   }
   wireHome();
   $('#start-rating').textContent = drawing.mine ? 'rate drawings' : drawing.myVote ? 'edit your rating' : 'rate this drawing';
@@ -330,6 +366,7 @@ function renderRating(){
   }
   show(title('rate a drawing')+`<div class="rating-layout"><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time> · ${escape(drawing.prompt)}</p><img class="rating-drawing" alt="${escape(drawing.prompt)}"><fieldset class="star-picker"><legend>your rating</legend>${[1,2,3,4,5].map(n=>`<label><input type="radio" name="stars" value="${n}" aria-label="${counted(n, 'star')}"><span aria-hidden="true">☆</span></label>`).join('')}</fieldset><p id="rating-status" class="muted" role="status">choose 1–5 stars</p><div class="rating-actions"><button class="web-button" id="skip-rating">skip</button><button class="web-button primary" id="save-rating" disabled>save rating</button></div></div>`);
   wireHome();let selected=drawing.myVote || 0, imageReady=false, votePending=false;
+  addReportButton(drawing,panel.querySelector('.rating-actions'));
   const ratingImage=panel.querySelector('.rating-drawing');
   const stars=panel.querySelector('.star-picker');
   const ratingStatus=$('#rating-status'), saveRating=$('#save-rating');
@@ -394,7 +431,7 @@ async function load() {
     if (state.submission) { showDrawing(state.submission); return; }
     if (!editor) {
       if (!loadEditor) throw new Error('drawing tools are unavailable. please reload.');
-      show(`<div class="panel-title"><h2>today's drawing</h2></div><div class="drawing-welcome"><p class="display-date">${escape(formatPromptDate(state.date))}</p><h3>today's prompt: "${escape(state.prompt)}"</h3><p>draw your interpretation. a quick doodle is welcome.</p><ul><li>your draft saves on this device.</li><li>one drawing per day — final once saved to the gallery.</li><li>a new prompt arrives at midnight eastern.</li></ul>${storageUnavailable ? '<p role="status">local draft storage is unavailable. your drawing may not survive a reload.</p>' : ''}<button class="web-button primary" id="begin-drawing">begin drawing</button><p id="begin-status" role="status"></p></div>`);
+      show(`<div class="panel-title"><h1 id="page-heading">today's drawing</h1></div><div class="drawing-welcome"><p class="display-date">${escape(formatPromptDate(state.date))}</p><h2>today's prompt: "${escape(state.prompt)}"</h2><p>draw your interpretation. a quick doodle is welcome.</p><ul><li>your draft saves on this device.</li><li>one drawing per day — final once saved to the gallery.</li><li>a new prompt arrives at midnight eastern.</li></ul>${storageUnavailable ? '<p role="status">local draft storage is unavailable. your drawing may not survive a reload.</p>' : ''}<button class="web-button primary" id="begin-drawing">begin drawing</button><p id="begin-status" role="status"></p></div>`);
       $('#begin-drawing').onclick = async () => {
         const button = $('#begin-drawing'); button.disabled = true; button.textContent = 'opening…';
         try {
@@ -429,7 +466,12 @@ async function load() {
     else await openArchive();
   } catch (error) { if (generation === viewGeneration) errorScreen(error); }
 }
-window.addEventListener('popstate', () => { load().catch(errorScreen); });
+window.addEventListener('popstate', () => {
+  const address = pageAddress();
+  if (address === navigationAddress) return;
+  navigationAddress = address;
+  load().catch(errorScreen);
+});
 async function attachEditor() {
   const { createSubmissionControls } = await import('./submission.js');
   editorUI = createSubmissionControls({

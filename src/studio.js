@@ -1,16 +1,17 @@
-import { COLORS, BRUSH_SIZES, CANVAS_SIZE, createDocument, draftKey, restoreDraft, History } from './model.js';
+import { COLORS, BACKGROUND_COLORS, colorEntry, BRUSH_SIZES, CANVAS_SIZE, createDocument, draftKey, restoreDraft, History } from './model.js';
 import { BRUSH_SHAPES, DRAWING_TOOLS, createBrushRenderer, roughVertices } from './brushes.js';
 import { fillRuns, drawFill } from './fill.js';
 import { openDraftDatabase, readDraft } from './draft-storage.js';
 import { createStrokeCache, createActivePencilCache, watchCanvasRecovery } from './canvas-cache.js';
 import { setCloseIcon } from './close-button.js';
-import { canvasPoint, appendPointerSamples, pointerPosition, TOUCH_OFFSET } from './pointer-input.js';
+import { canvasPoint, appendPointerSamples, pointerPosition, TOUCH_OFFSET, DRAWING_MARGIN } from './pointer-input.js';
 
 const $ = s => document.querySelector(s);
 const canvas = $('#canvas');
 const drawingSurface = document.createElement('div');
 drawingSurface.className = 'drawing-surface';
 drawingSurface.style.setProperty('--touch-offset', `${TOUCH_OFFSET}px`);
+drawingSurface.style.setProperty('--drawing-margin', `${DRAWING_MARGIN}px`);
 $('#canvas-frame').before(drawingSurface);
 drawingSurface.append($('#canvas-frame'));
 const touchStrip = document.createElement('div');
@@ -189,8 +190,8 @@ function selectColor(value, background = false) {
     color = value; selectTool('brush');
   }
 }
-for (const entry of COLORS) {
-  for (const background of [false, true]) {
+for (const background of [false, true]) {
+  for (const entry of background ? BACKGROUND_COLORS : COLORS) {
     const button = document.createElement('button'); button.className = 'swatch'; button.style.setProperty('--color', entry.value); button.style.setProperty('--check', entry.name === 'Midnight' ? '#FFFFFF' : '#343044');
     const rgb = entry.value.slice(1).match(/../g).map(channel => parseInt(channel, 16));
     button.style.setProperty('--check', rgb[0] * .299 + rgb[1] * .587 + rgb[2] * .114 < 140 ? '#FFFFFF' : '#343044');
@@ -212,7 +213,7 @@ for (const background of [false, true]) {
   picker.append(palette);
   const update = () => {
     const value = background ? history.document.background : color;
-    const selected = COLORS.find(entry => entry.value === value);
+    const selected = colorEntry(value);
     summary.querySelector('.selected-color-chip').style.background = value;
     summary.querySelector('.selected-color-name').textContent = selected.name.toLowerCase();
     summary.setAttribute('aria-label', `${background ? 'background' : 'color'}: ${selected.name.toLowerCase()}`);
@@ -269,7 +270,8 @@ $('#clear').onclick = () => { if (!ready || active || !history.document.strokes.
 drawingSurface.addEventListener('pointerdown', event => {
   if (!ready || active || !event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return;
   const rect = inputRect(event), target = pointerPosition(event);
-  if (target.x < rect.left || target.x > rect.right || target.y < rect.top || target.y > rect.bottom) return;
+  const margin = tool === 'brush' && brushStyle === 'fill' ? 0 : DRAWING_MARGIN;
+  if (target.x < rect.left - margin || target.x > rect.right + margin || target.y < rect.top - margin || target.y > rect.bottom + margin) return;
   if (tool === 'brush' && brushStyle === 'fill') {
     event.preventDefault();
     if (!render()) { toast('canvas recovering. please try again.'); return; }
@@ -285,7 +287,7 @@ drawingSurface.addEventListener('pointerdown', event => {
     return;
   }
   event.preventDefault(); pointerId = event.pointerId; drawingSurface.setPointerCapture(pointerId);
-  active = { tool, color, size, style: tool === 'eraser' ? 'brush' : brushStyle, shape: brushShape, points: [canvasPoint(event, rect, CANVAS_SIZE)] };
+  active = { tool, color, size, extended:true, style: tool === 'eraser' ? 'brush' : brushStyle, shape: brushShape, points: [canvasPoint(event, rect, CANVAS_SIZE, true)] };
   if (tool === 'brush' && brushStyle === 'pencil') {
     active.seed = crypto.getRandomValues(new Uint32Array(1))[0];
     active.pencilVersion = 2;
@@ -296,13 +298,13 @@ drawingSurface.addEventListener('pointerdown', event => {
 let frame = null;
 drawingSurface.addEventListener('pointermove', event => {
   if (!active || event.pointerId !== pointerId) return;
-  if (active.style === 'line') active.points[1] = canvasPoint(event, inputRect(event), CANVAS_SIZE);
-  else appendPointerSamples(active.points, event, inputRect(event), CANVAS_SIZE);
+  if (active.style === 'line') active.points[1] = canvasPoint(event, inputRect(event), CANVAS_SIZE, true);
+  else appendPointerSamples(active.points, event, inputRect(event), CANVAS_SIZE, true);
   if (frame === null) frame = requestAnimationFrame(() => { frame = null; render(); });
 });
 function finish(event) {
   if (!active || event.pointerId !== pointerId) return;
-  if (active.style === 'line' && event.type === 'pointerup') active.points[1] = canvasPoint(event, canvas.getBoundingClientRect(), CANVAS_SIZE);
+  if (active.style === 'line' && event.type === 'pointerup') active.points[1] = canvasPoint(event, canvas.getBoundingClientRect(), CANVAS_SIZE, true);
   if (active.style === 'line' && ['pointercancel', 'lostpointercapture'].includes(event.type)) {
     if (frame !== null) { cancelAnimationFrame(frame); frame = null; }
     active = null; pointerId = null; render(); return;
@@ -426,7 +428,7 @@ const focusSelect = name => sharedTools.querySelector(`[data-focus="${name}"]`);
 for (const [name, options] of [['shape', BRUSH_SHAPES], ['style', DRAWING_TOOLS]]) {
   for (const value of options) focusSelect(name).add(new Option(value, value));
 }
-for (const name of ['color', 'background']) for (const entry of COLORS) {
+for (const name of ['color', 'background']) for (const entry of name === 'background' ? BACKGROUND_COLORS : COLORS) {
   const option = document.createElement('option');
   option.value = entry.value; option.textContent = entry.name.toLowerCase();
   focusSelect(name).append(option);
@@ -468,6 +470,10 @@ for (const name of ['color', 'background']) {
   select.after(button);
   button.onclick = () => {
     activeColorMenu = name;
+    const options = colorMenu.querySelector('.color-menu-options');
+    for (const entry of name === 'background' ? BACKGROUND_COLORS : COLORS) {
+      options.append(options.querySelector(`[data-color="${entry.value}"]`));
+    }
     colorMenu.querySelector('h2').textContent = name;
     for (const option of colorMenu.querySelectorAll('.color-menu-option')) {
       option.setAttribute('aria-pressed', String(option.dataset.color === (name === 'background' ? history.document.background : color)));
@@ -486,7 +492,7 @@ function syncFocusTools() {
   focusSelect('background').value = history.document.background;
   for (const name of ['color', 'background']) {
     const value = name === 'background' ? history.document.background : color;
-    const label = COLORS.find(entry => entry.value === value).name.toLowerCase();
+    const label = colorEntry(value).name.toLowerCase();
     const button = sharedTools.querySelector(`[data-color-menu="${name}"]`);
     button.querySelector('.color-menu-swatch').style.backgroundColor = value;
     button.querySelector('.color-menu-value').textContent = label;
@@ -517,7 +523,7 @@ syncToolViews = () => {
     button.classList.toggle('selected', selected); button.setAttribute('aria-pressed', String(selected));
   }
   $('#brush-shape').value = brushShape; $('#brush-style').value = brushStyle;
-  $('#color-name').textContent = COLORS.find(entry => entry.value === color).name;
+  $('#color-name').textContent = colorEntry(color).name;
   $('#color-hex').textContent = color;
   for (const update of paletteViews) update();
   syncFocusTools();

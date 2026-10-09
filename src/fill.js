@@ -1,6 +1,6 @@
 // Four-connected flood fill of the visible canvas. Store horizontal runs rather
 // than a bitmap or a seed: later background edits must not change the filled area.
-export function fillRuns({ data, width, height }, x, y, color, tolerance = 24) {
+export function fillRuns({ data, width, height }, x, y, color, tolerance = 48) {
   x = Math.max(0, Math.min(width - 1, Math.floor(x)));
   y = Math.max(0, Math.min(height - 1, Math.floor(y)));
   const start = y * width + x, offset = start * 4;

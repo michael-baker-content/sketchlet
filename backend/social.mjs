@@ -59,6 +59,13 @@ export async function handlePublicPage(req, res, url, dependencies = {}) {
   try {
     const origin = dependencies.origin || publicOrigin();
     const path = url.pathname;
+    if (path === '/admin' || path === '/admin/') {
+      // Only the sign-in shell is public. Admin data is always session-gated.
+      res.writeHead(200, { 'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'private, no-store',
+        // Same-origin form POSTs must retain Origin for the admin CSRF check.
+        'X-Robots-Tag':'noindex, nofollow', 'Referrer-Policy':'same-origin' });
+      res.end(req.method === 'HEAD' ? undefined : renderPageShell('admin.html')); return;
+    }
     if (path === '/robots.txt') {
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' });
       res.end(req.method === 'HEAD' ? undefined : 'User-agent: *\nAllow: /\n'); return;
@@ -86,7 +93,7 @@ export async function handlePublicPage(req, res, url, dependencies = {}) {
       if (!row) throw Object.assign(new Error('not found'), { status: 404 });
       const author = row.name || 'someone';
       meta = { path: drawingPath(row.id, row.prompt),
-        title: drawingCaption(row.name, row.prompt),
+        title: `${drawingCaption(row.name, row.prompt)} on sketchlet`,
         description: `“${row.prompt}” by ${author}, drawn on ${formatPromptDate(row.date)}. View and rate this drawing on sketchlet.` };
     } else if (date) {
       if (!dateValid(date)) throw Object.assign(new Error('not found'), { status: 404 });
@@ -101,7 +108,7 @@ export async function handlePublicPage(req, res, url, dependencies = {}) {
     }
     const html = await deps.html(path === '/' ? 'index.html' : 'gallery.html');
     const body = html.replace(/<title>[\s\S]*?<\/title>/, socialTags(meta, origin));
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=0, s-maxage=300' });
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': id ? 'private, no-store' : 'public, max-age=0, s-maxage=300' });
     res.end(req.method === 'HEAD' ? undefined : body);
   } catch (error) {
     const status = error.status === 404 ? 404 : 503;

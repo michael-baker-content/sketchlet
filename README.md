@@ -74,14 +74,14 @@ Sketchlet uses **HTML, CSS, and JavaScript**, with the Canvas API doing the draw
 
 The database enforces one drawing per guest per prompt and one editable vote per guest per drawing. Server-side checks block self-voting, and shared request limits help curb abuse. Without accounts, these are browser-based rules—not proof that each visitor is a different person.
 
-Public page metadata is rendered server-side for social crawlers. All shared links advertise the pixel paintbrush logo, never submitted artwork or ratings. Home uses “sketchlet - a little drawing every day”; drawing titles credit the creator, such as “Michael drew a singing kite,” regardless of who sends the link. Social descriptions stay short, and X cards request the compact summary format. Artwork sharing remains an explicit **share card** action. Messaging apps decide the final layout and may retain cached previews.
+Public page metadata is rendered server-side for social crawlers. All shared links advertise the pixel paintbrush logo, never submitted artwork or ratings. Home uses “sketchlet - a little drawing every day”; drawing link titles credit the creator, such as “Michael drew a singing kite on sketchlet,” regardless of who sends the link. Social descriptions stay short, and X cards request the compact summary format. Artwork sharing remains an explicit **share card** action, whose caption omits the site suffix because the card already includes branding. Messaging apps decide the final layout and may retain cached previews.
 
 The main pieces are:
 
 - `src/studio.js`, `src/model.js`, and `src/brushes.js`: canvas, tools, undo, and shared stroke-spacing rules.
 - `src/draft-storage.js`: shared access to date-scoped IndexedDB drafts for home startup and the editor.
 - `src/canvas-cache.js` and `src/pointer-input.js`: reuse rendered strokes and map batched pointer samples to canvas coordinates.
-- `backend/page-shell.mjs`: shared HTML template for two separate pages, generated as `dist/index.html` and `dist/gallery.html` during the build and rendered directly by the page server.
+- `backend/page-shell.mjs`: shared HTML template for the separate home, gallery, and admin pages, generated during the build and rendered directly by the page server.
 - `src/home-page.js`: today's page; submission status is checked before loading an editor.
 - `src/gallery-page.js`: gallery and shared-drawing pages, independent of the editor and today's status request.
 - `src/editor.html` and `src/submission.js`: drawing markup and submission controls, loaded only for an unfinished day.
@@ -89,6 +89,9 @@ The main pieces are:
 - `src/api-client.js` and `src/page-startup.js`: API requests and conditional home startup.
 - `src/text-format.js`: singular/plural count labels and creator captions shared by gallery text, share cards, and link metadata.
 - `backend/social.mjs`, `backend/social-data.mjs`, and `api/pages.js`: crawler-friendly page metadata and generated social preview images.
+- `backend/admin-auth.mjs`, `backend/admin-store.mjs`, and `src/admin-moderation.js`: administrator sign-in, submission/report review, hide/restore, name clearing, and private audit history. See [admin setup](docs/ADMIN.md).
+- `backend/gallery-handler.mjs`: public API behavior with injectable database/storage dependencies for tests; `backend/api.mjs` connects the real services. `backend/storage.mjs` shares image delivery between public visibility checks and authenticated admin review.
+- `src/report-dialog.js` and `src/moderation-options.js`: visitor reporting and shared report/removal categories.
 - `src/styles/`: base styles, playful details, retro surfaces, page layouts, and loading styles, loaded in that order. Dropdown surfaces and cursors are shared across drawing layouts.
 - `backend/` and `db/`: local server, API, validation, storage access, and database migrations.
 - `api/`, `scripts/`, and `vercel.json`: hosting, social-preview rendering, local development, and the public-file build.
@@ -96,7 +99,11 @@ The main pieces are:
 
 ## still on the sketchpad
 
-Sketchlet is an early version. Accounts and cross-device history, community-suggested prompts, old-draft recovery, and moderation/reporting are future work.
+Daily prompts now follow a [26-week curated calendar](docs/PROMPTS.md), mixing simple visual twists, familiar named subjects, and occasional pairs or trios. Existing prompt galleries retain their original titles.
+
+Sketchlet is an early version. Accounts and cross-device history, community-suggested prompts, and old-draft recovery are future work.
+
+The `/admin` page supports owner-only GitHub sign-in, submission and report review, reversible drawing removal, display-name clearing, and an activity log. Visitors can report drawings without logging in. Hidden drawings remain that day's submission and cannot be replaced. Guest restrictions, prompt management, and email alerts are still planned.
 
 Public gallery browsing currently covers up to 90 prompt dates and 200 drawings per prompt. Your profile's drawing list loads in pages of 24.
 
@@ -119,4 +126,4 @@ The browser checks in `checks/browser/` serve the real page assets through Playw
 
 Drawing checks compare incremental pencil rendering against full replay pixel-for-pixel and verify reduced grain operations, pointer batching, and tool state across layouts. These guard correctness and repeated work; they do not measure real-phone responsiveness. See the [drawing release checks](docs/DEPLOYMENT.md#drawing-performance-release-checks) before assessing performance on a device.
 
-[Deployment and release checks](docs/DEPLOYMENT.md) · [Design direction](docs/DESIGN.md)
+[Deployment and release checks](docs/DEPLOYMENT.md) · [Admin setup](docs/ADMIN.md) · [Design direction](docs/DESIGN.md)

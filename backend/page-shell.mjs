@@ -2,6 +2,7 @@
 const pages = new Map([
   ['index.html', { title:'sketchlet - a little drawing every day', label:'today', script:'/src/home-page.js' }],
   ['gallery.html', { title:'gallery — sketchlet', label:'gallery', script:'/src/gallery-page.js' }],
+  ['admin.html', { title:'admin — sketchlet', label:'administration', script:'/src/admin-page.js' }],
 ]);
 
 export const PAGE_FILES = [...pages.keys()];
@@ -17,6 +18,7 @@ export function renderPageShell(file) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f5f2fc">
   <title>${page.title}</title>
+  ${file === 'admin.html' ? '<meta name="robots" content="noindex, nofollow">' : ''}
   <link rel="icon" type="image/svg+xml" href="/src/assets/favicon.svg">
   <script src="/src/loading.js"></script>
   <link rel="stylesheet" href="/src/styles/base.css">
@@ -26,6 +28,7 @@ export function renderPageShell(file) {
   <link rel="stylesheet" href="/src/styles/loading.css">
 </head>
 <body>
+  <a class="skip-link" href="#main-content">skip to content</a>
   <div id="page-loader" role="status" aria-live="polite">
     <svg class="loading-sketch" viewBox="0 0 140 48" aria-hidden="true"><path pathLength="1" d="M8 34 Q28 4 42 26 T75 22 T104 26 L130 14 M12 41 Q65 35 124 40"/></svg>
     <p id="loading-message">loading sketchlet…</p>
@@ -36,9 +39,9 @@ export function renderPageShell(file) {
     <a class="brand" href="/" aria-label="sketchlet home">sketchlet</a>
     <nav aria-label="main navigation"><a id="open-home" href="/">home</a><a id="open-archive" href="/gallery">gallery</a></nav>
   </header>
-  <main>
-    <section id="page-content" class="flow-panel" aria-label="${page.label}">
-      <div class="panel-title"><h2>${page.label}</h2></div>
+  <main id="main-content" tabindex="-1">
+    <section id="page-content" class="flow-panel" aria-labelledby="page-heading">
+      <div class="panel-title"><h1 id="page-heading">${page.label}</h1></div>
       <div class="empty-state" role="status">loading…</div>
     </section>
   </main>

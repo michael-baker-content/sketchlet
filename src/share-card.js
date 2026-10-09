@@ -28,6 +28,29 @@ function text(ctx, value, x, y, width, size, { bold = false, color = '#32124f', 
   ctx.fillText(label, x, y);
 }
 
+function caption(ctx, value, x, y, width, height) {
+  let lines, size = 40;
+  for (; size >= 22; size--) {
+    ctx.font = `700 ${size}px ${FONT}`;
+    lines = [''];
+    for (const word of value.split(/\s+/)) {
+      let line = lines.at(-1);
+      if (line && ctx.measureText(line + ' ' + word).width > width) { lines.push(''); line = ''; }
+      if (line) lines[lines.length - 1] += ' ';
+      for (const character of word) {
+        if (ctx.measureText(lines.at(-1) + character).width > width) lines.push('');
+        lines[lines.length - 1] += character;
+      }
+    }
+    if (lines.length * size * 1.25 <= height) break;
+  }
+  size = Math.max(22,size);
+  const maximum = Math.floor(height / (size * 1.25));
+  lines.slice(0,maximum).forEach((line,index) => text(ctx,
+    index === maximum - 1 && lines.length > maximum ? line + '…' : line,
+    x,y + index * size * 1.25,width,size,{bold:true,minimum:size}));
+}
+
 export async function createShareCard(drawing, { signal } = {}) {
   const imageUrl = new URL(drawing.image, location.origin);
   if (imageUrl.origin !== location.origin) throw new Error('could not load this drawing.');
@@ -59,31 +82,27 @@ export async function createShareCard(drawing, { signal } = {}) {
     ctx.save();
     ctx.translate(WIDTH * (1 - contentScale) / 2, HEIGHT * (1 - contentScale) / 2);
     ctx.scale(contentScale, contentScale);
-    bevel(ctx, 24, 24, WIDTH - 48, HEIGHT - 48, '#d5d0d9');
-    ctx.fillStyle = '#e7d9f5'; ctx.fillRect(28, 28, WIDTH - 56, 112);
+    ctx.beginPath(); ctx.roundRect(24, 24, WIDTH - 48, HEIGHT - 48, 48);
+    ctx.fillStyle = '#d5d0d9'; ctx.fill();
+    ctx.lineWidth = 4; ctx.strokeStyle = '#827294'; ctx.stroke();
     const gradient = ctx.createLinearGradient(56, 0, 310, 0);
     gradient.addColorStop(0, '#4a147b'); gradient.addColorStop(.55, '#743d91'); gradient.addColorStop(1, '#a43f68');
-    text(ctx, 'sketchlet', 56, 105, 370, 72, { bold: true, color: gradient });
-    ctx.font = `400 30px ${FONT}`; ctx.fillStyle = '#493655'; ctx.textAlign = 'right';
-    ctx.fillText(formatPromptDate(drawing.date), WIDTH - 56, 98); ctx.textAlign = 'left';
-    ctx.fillStyle = '#6d4c86'; ctx.fillRect(28, 138, WIDTH - 56, 2); ctx.fillRect(28, 144, WIDTH - 56, 2);
-    text(ctx, drawingCaption(drawing.displayName, drawing.prompt), 56, 202, WIDTH - 112, 43, { bold: true });
-    bevel(ctx, 56, 232, 600, 600, '#ffffff', true);
-    const edge = 592, scale = Math.min(edge / image.naturalWidth, edge / image.naturalHeight);
+    text(ctx, 'sketchlet', 64, 137, 292, 68, { bold: true, color: gradient });
+    text(ctx, formatPromptDate(drawing.date), 64, 183, 292, 29);
+    ctx.fillStyle = '#827294'; ctx.fillRect(64, 211, 292, 2); ctx.fillRect(64, 217, 292, 2);
+    caption(ctx, drawingCaption(drawing.displayName, drawing.prompt), 64, 273, 292, 300);
+    // Keep the artwork square and uncropped; only the enclosing card is rounded.
+    bevel(ctx, 384, 80, 760, 760, '#ffffff', true);
+    const edge = 752, scale = Math.min(edge / image.naturalWidth, edge / image.naturalHeight);
     const iw = image.naturalWidth * scale, ih = image.naturalHeight * scale;
-    ctx.drawImage(image, 60 + (edge - iw) / 2, 236 + (edge - ih) / 2, iw, ih);
-    bevel(ctx, 696, 232, 448, 600, '#e7d9f5');
-    const sectionHeight = 600 / 3;
-    const sectionTop = index => 232 + index * sectionHeight;
-    ctx.fillStyle = '#b39adb';
-    for (const index of [1, 2]) ctx.fillRect(728, sectionTop(index), 384, 2);
-    text(ctx, 'drawn by', 728, sectionTop(0) + 80, 384, 27);
-    text(ctx, drawing.displayName || 'anonymous', 728, sectionTop(0) + 134, 384, 44, { bold: true, minimum: 22 });
+    ctx.drawImage(image, 388 + (edge - iw) / 2, 84 + (edge - ih) / 2, iw, ih);
+    ctx.fillStyle = '#827294';
+    for (const y of [590,730]) ctx.fillRect(64, y, 292, 2);
     const rated = drawing.count > 0 && Number.isFinite(drawing.average);
-    text(ctx, rated ? `${drawing.average.toFixed(1)} / 5` : 'not rated yet', 728, sectionTop(1) + 96, 384, rated ? 64 : 42, { bold: true });
-    text(ctx, counted(drawing.count || 0, 'rating'), 728, sectionTop(1) + 144, 384, 30);
-    text(ctx, 'a little drawing every day', 728, sectionTop(2) + 84, 384, 32, { bold: true });
-    text(ctx, location.host, 728, sectionTop(2) + 134, 384, 29, { bold: true });
+    text(ctx, rated ? `${drawing.average.toFixed(1)} / 5` : 'not rated yet', 64, 654, 292, rated ? 54 : 36, { bold: true });
+    text(ctx, counted(drawing.count || 0, 'rating'), 64, 699, 292, 29);
+    text(ctx, 'a little drawing every day', 64, 778, 292, 29, { bold: true });
+    text(ctx, location.host, 64, 824, 292, 26, { bold: true });
     ctx.restore();
     return await new Promise((resolve, reject) => canvas.toBlob(blob => {
       if (blob) resolve(blob); else reject(new Error('could not create the card. please try again.'));

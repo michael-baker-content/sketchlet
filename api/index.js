@@ -9,6 +9,10 @@ export default async function handler(req, res) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'not found' })); return;
     }
+    if (path === 'admin' || path.startsWith('admin/')) {
+      const { handleAdmin } = await import('../backend/admin.mjs');
+      await handleAdmin(req, res, `/api/${path}`); return;
+    }
     const { handleApi } = await import('../backend/api.mjs');
     await handleApi(req, res, `/api/${path}`);
   } catch {

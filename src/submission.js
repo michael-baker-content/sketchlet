@@ -17,8 +17,14 @@ bar.querySelector('.save-buttons').append(downloadButton);
 bar.querySelector('.save-buttons').append($('#save-status'));
 $('.download-note').hidden = true;
 const dialog = document.createElement('dialog'); dialog.className='submission-dialog';
+dialog.setAttribute('aria-labelledby', 'submission-heading');
 dialog.innerHTML='<form method="dialog"><h2>save to the gallery?</h2><p>your drawing will be visible to others and final for this prompt.</p><img alt="your drawing before submission"><p id="submission-error" role="alert"></p><div class="dialog-actions"><button class="web-button" value="cancel">keep drawing</button><button class="web-button primary" id="confirm-submit" type="button">save to gallery</button></div></form>';
 document.body.append(dialog);
+dialog.querySelector('h2').id = 'submission-heading';
+dialog.addEventListener('close', () => {
+  const trigger = $('#review-drawing');
+  if (!bar.hidden && !trigger.disabled) trigger.focus({ preventScroll:true });
+});
 dialog.querySelector('[value="cancel"]').type = 'button';
 dialog.querySelector('[value="cancel"]').onclick = () => { if (!saving) dialog.close(); };
 $('#confirm-submit').type = 'submit';

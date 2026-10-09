@@ -9,12 +9,15 @@
     "api/pages.js": { "maxDuration": 30, "includeFiles": "src/assets/favicon.svg" }
   },
   "redirects": [
+    { "source": "/admin.html", "destination": "/admin", "permanent": true },
     { "source": "/index.html", "destination": "/", "permanent": true },
     { "source": "/gallery.html", "destination": "/gallery", "permanent": true }
   ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/index?__sketchlet_path=:path*" },
     { "source": "/", "destination": "/api/pages?__page=/" },
+    { "source": "/admin", "destination": "/api/pages?__page=/admin" },
+    { "source": "/admin/", "destination": "/api/pages?__page=/admin" },
     { "source": "/gallery", "destination": "/api/pages?__page=/gallery" },
     { "source": "/gallery/", "destination": "/api/pages?__page=/gallery" },
     { "source": "/d/:id", "destination": "/api/pages?__page=/d/:id" },

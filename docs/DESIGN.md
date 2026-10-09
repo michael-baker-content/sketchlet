@@ -62,7 +62,7 @@ Next: validate layered pencil shading, long regular-brush strokes, and erasing o
 
 Dropdown order: brush, marker, pencil, spray, line, fill, dashed, dotted. New pencil strokes use `pencilVersion: 2`, with grain opacity multiplied by 1.35 (approximately 16–46%). New spray strokes use `sprayVersion: 5`: four shaped dots per distance sample at 40% opacity. Dot size and spacing are unchanged. Spray deposits while moving, not continuously while stationary. Versioned rendering preserves older strokes during undo, reload, and replay; no database migration is needed.
 
-The drawing-tools dropdown includes brush styles, line, and fill. Lines preview between two endpoints and commit on release; pointer cancellation discards an unfinished line. Fill uses four-connected visible pixels with a fixed per-channel tolerance of 24, then stores sorted horizontal runs in the document. Replay paints these runs directly, so subsequent background changes cannot alter the filled region. Flood-fill pixel buffers are temporary and used only on a fill action. Pattern fills are deferred. Existing drafts remain valid; new fill actions require this version of the editor to restore.
+The drawing-tools dropdown includes brush styles, line, and fill. Lines preview between two endpoints and commit on release; pointer cancellation discards an unfinished line. Fill uses four-connected visible pixels with a fixed per-channel tolerance of 48 (increased from 24 to include more smoothed edge pixels), then stores sorted horizontal runs in the document. Replay paints these runs directly, so subsequent background changes cannot alter the filled region. Flood-fill pixel buffers are temporary and used only on a fill action. Pattern fills are deferred. Existing drafts remain valid; new fill actions require this version of the editor to restore.
 
 ## Page loading
 
@@ -74,6 +74,8 @@ Initial document loads show a small pencil-stroke loader before revealing the he
 
 ## Touch workspace
 
+The drawing surface reserves a 10px input margin around the canvas in normal and full-screen views. Non-fill tools can start there; fill still requires a target inside the canvas. New strokes store bounded outside coordinates with `extended: true`, preserving paths through exits and re-entry without clamping them onto an edge. Canvas buffers clip paint and erasure to the original square, so the margin is never exported. Existing drafts remain valid; drafts with extended strokes require this version to restore. The margin uses space inside the existing surface width to avoid overflowing narrow layouts, and the 24px finger offset remains in effect.
+
 Drawing dropdowns share their surface styling in `src/styles/flow.css`, with separate dimensions for desktop (46px) and mobile/full-screen (44px). Desktop color-picker component styling lives in `src/styles/retro.css`; `flow.css` retains minimum-width adjustments. Avoid adding a second visual skin in `playful.css` that is immediately overridden elsewhere.
 
 Cursor CSS is consolidated in `src/styles/flow.css`. A single `--cursor-color` controls circle/square borders, the rough outline, and the touch halo; erase changes only that variable. Older tinted cursor definitions were removed from `playful.css`. Browser regressions cover the resulting shape, transparency, and contrast states.
@@ -84,7 +86,21 @@ Finger input targets 24 screen pixels above contact, including line and fill. A 
 
 ## Share card layout
 
-The 1200×920 PNG centers its card content at 85% scale, leaving decorative outer margins. The headline credits the creator (for example, “Michael drew a singing kite”). The right panel has three equal-height sections for creator, ratings, and site information, with two separators. Ratings are a snapshot at generation time; the “ratings when shared” label is omitted. Link previews remain logo-only and separate from these explicitly generated cards.
+The 1200×920 PNG centers its content at 85% scale, leaving decorative outer margins. The main container has a 48px rounded corner radius so it sits more naturally inside messaging previews. Branding, date, caption, ratings, and site information occupy a narrow left column; the drawing occupies a large square area on the right and remains uncropped. Ratings are a snapshot at generation time; the “ratings when shared” label is omitted. Link previews remain logo-only and separate from these explicitly generated cards.
+
+## Accessibility
+
+The shared shell provides a keyboard-visible skip link and focusable main landmark. Each page view has a top-level heading; initial focus waits until the loader reveals the content, and gallery view changes focus the new heading. The editor has a visually hidden prompt heading. Modal dialogs have accessible names, and submission cancellation returns focus to its trigger. Native rating radios support arrow-key selection without requiring a drawing submission. Browser regressions exercise these keyboard paths.
+
+The drawing surface still requires mouse, touch, or pen input. Artwork labels identify the prompt rather than describing every visual detail, and automatic share cards are images. These are remaining accessibility limitations; the project has not had a full screen-reader or standards-conformance audit.
+
+## Administration and future accounts
+
+Administration uses its own page, GitHub sign-in, and server-side session, independent of guest ownership. Only the configured numeric GitHub account ID is authorized. The review panel supports paginated submissions and reports, hide/restore, display-name clearing, and private decision history. Setup and remaining work are in [ADMIN.md](ADMIN.md).
+
+Unnamed guests can report with a category and optional explanation, with duplicate prevention and rate limits. Moderation is reversible: hide/restore with a standard owner-visible reason and private notes. The `sketchlet_public_drawings` database view is the common visibility policy for public listings, covers, ratings, image delivery, and crawler metadata. Hidden drawings remain daily submissions; owner responses contain a notice rather than image/share data. Admin image delivery checks its own session. Reports never automatically hide content, and resolving a report never restores it. Name clearing affects all the creator's drawings but permits a new name. Drawing, rating, and name restrictions remain future independent controls. Immediate publication remains the default; approval before publication and email alerts are deferred.
+
+Optional public accounts remain planned. A successful public sign-in must never grant admin permission automatically, and linking accounts to existing guest work will require a separate design.
 
 ## Working agreement
 

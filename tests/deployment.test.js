@@ -52,6 +52,7 @@ test('published assets exist and their relative imports remain public',async()=>
   for(const file of ['.env.local','.neon','backend/server.mjs','backend/api.mjs','docs/DESIGN.md','docs/DEPLOYMENT.md','scripts/correct-singing-kite.mjs','package-lock.json'])assert.equal(PUBLIC_FILES.includes(file),false);
   assert.equal(PUBLIC_FILES.includes('backend/social.mjs'),false);
   assert.equal(publicFile('/backend/page-shell.mjs'),null);
+  for (const file of ['admin.mjs','admin-auth.mjs','admin-store.mjs','gallery-handler.mjs','moderation.mjs','storage.mjs']) assert.equal(publicFile('/backend/' + file),null);
 });
 test('deployment publishes only dist and routes drawing URLs to the app',async()=>{
   const config=JSON.parse(await readFile(new URL('../vercel.json',import.meta.url),'utf8'));
@@ -62,6 +63,9 @@ test('deployment publishes only dist and routes drawing URLs to the app',async()
   assert.equal(config.functions['api/pages.js'].includeFiles,'src/assets/favicon.svg');
   assert.equal(publicFile('/gallery'),'gallery.html');
   assert.equal(publicFile('/gallery/'),'gallery.html');
+  assert.equal(publicFile('/admin'),'admin.html');
+  assert.ok(config.rewrites.some(rule=>rule.source==='/admin' && rule.destination==='/api/pages?__page=/admin'));
+  assert.ok(config.redirects.some(rule=>rule.source==='/admin.html' && rule.destination==='/admin'));
   assert.equal(publicFile('/gallery/private'),null);
   assert.ok(config.rewrites.some(rule=>rule.source==='/api/:path*' && rule.destination.startsWith('/api/index?')));
 });

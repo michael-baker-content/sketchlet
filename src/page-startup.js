@@ -1,4 +1,4 @@
-// Resolve eligibility before loading any editor code or draft storage.
+// Resolve eligibility before loading the editor or opening draft storage.
 export async function startHome({ loadToday, loadEditor, checkDraft, startPage }) {
   const today = await loadToday();
   if (today.submission) return startPage({ page: 'home', today, editor: null });
@@ -13,7 +13,9 @@ export function startupError(error) {
   for (const element of document.querySelectorAll('.studio, .intro, .submit-bar')) element.hidden = true;
   const panel = document.querySelector('#page-content');
   panel.hidden = false;
-  panel.replaceChildren();
+  const heading = document.createElement('h1');
+  heading.id = 'page-heading'; heading.textContent = 'could not load'; heading.tabIndex = -1;
+  panel.replaceChildren(heading);
   const message = document.createElement('p');
   message.className = 'empty-state';
   message.setAttribute('role', 'alert');
@@ -24,6 +26,7 @@ export function startupError(error) {
   retry.onclick = () => window.location.reload();
   panel.append(message, retry);
   window.sketchletLoading?.finish();
+  heading.focus();
 }
 
 export async function revealPage() {
@@ -35,5 +38,10 @@ export async function revealPage() {
     catch { throw new Error('could not load the drawing image. please try again.'); }
   }
   window.sketchletLoading?.finish();
+  // Initial headings cannot receive focus while the loading screen hides them.
+  if (!document.querySelector('dialog[open]')) {
+    const heading = document.querySelector('#page-content:not([hidden]) #page-heading');
+    if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll:true }); }
+  }
   document.dispatchEvent(new Event('sketchlet:page-ready'));
 }

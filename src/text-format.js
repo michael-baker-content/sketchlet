@@ -4,5 +4,6 @@ export function counted(value, singular, plural = `${singular}s`) {
 }
 
 export function drawingCaption(name, prompt) {
-  return `${name || 'someone'} drew a ${prompt}`;
+  const completePhrase = /^(?:a|an|the|two|three)\b/i.test(prompt) || /^[A-Z]/.test(prompt);
+  return `${name || 'someone'} drew ${completePhrase ? '' : 'a '}${prompt}`;
 }

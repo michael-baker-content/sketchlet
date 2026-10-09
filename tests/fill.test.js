@@ -17,8 +17,10 @@ test('fill respects connected boundaries, includes openings and clamps edge taps
   assert.deepEqual(fillRuns(open,2,2,'#FFFFFF'), []);
 });
 test('fill tolerance accepts nearby edge colors without crossing a contrasting boundary', () => {
-  const pixels = { width: 4, height: 1, data: Uint8ClampedArray.from([255,255,255,255,240,240,240,255,0,0,0,255,255,255,255,255]) };
-  assert.deepEqual(fillRuns(pixels,0,0,'#CE4949'), [0,0,2]);
+  const pixels = { width: 6, height: 1, data: Uint8ClampedArray.from(
+    [255,240,220,207,206,255].flatMap(value => [value,value,value,255])) };
+  assert.deepEqual(fillRuns(pixels,0,0,'#CE4949'), [0,0,4]);
+  assert.deepEqual(fillRuns(pixels,0,0,'#CE4949',24), [0,0,2]);
 });
 test('fill and line actions survive draft restoration and one-step undo', () => {
   const fill = { tool: 'fill', color: '#CE4949', runs: [0,0,1200,1,0,1200] };

@@ -20,6 +20,10 @@ Display names are optional (up to 32 characters) and are cached in local storage
 
 Run commands from the repository root. After backend changes, stop the running server with Ctrl+C and restart it with `npm run dev`. The local entry point is `backend/server.mjs`. The current profile drawing list, rating, and interface updates require no new migrations or environment variables. Run the checks and build against the latest source before pushing.
 
+### Administrator foundation
+
+The admin addition introduces `db/004_admin_foundation.sql` and `db/005_moderation.sql`. **Run `npm run db:migrate` before deploying this update**, even if admin sign-in already works: public gallery queries now depend on the shared public-drawings view. The migration is additive and does not hide existing drawings. No new npm dependencies are needed. Admin access is optional and stays disabled until its GitHub account ID, OAuth app credentials, and canonical admin origin are configured. Follow [ADMIN.md](ADMIN.md) for setup and the hide/restore/report verification checklist. The public guest experience does not require admin credentials.
+
 ## 2. Put the project in GitHub
 
 The project is already hosted on GitHub and Vercel. For routine updates, commit and push the source changes after validation; Vercel builds the public assets from source. Do not commit `dist/` or environment files. Run new migrations before pushing code that requires them.

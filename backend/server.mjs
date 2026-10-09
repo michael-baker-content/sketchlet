@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { extname } from 'node:path';
 import { publicFile } from './public-files.mjs';
 import { handlePublicPage } from './social.mjs';
+import { handleAdmin } from './admin.mjs';
 
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml' };
 const configured = ['DATABASE_URL', 'AWS_ENDPOINT_URL_S3', 'AWS_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'].every(key => !!process.env[key]);
@@ -18,6 +19,11 @@ http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
     const pathname = decodeURIComponent(url.pathname);
+    if (pathname === '/api/admin' || pathname.startsWith('/api/admin/')) {
+      await handleAdmin(req, res, pathname); return;
+    }
+    if (pathname === '/admin' || pathname === '/admin/') { await handlePublicPage(req, res, url); return; }
+    if (pathname === '/admin.html') { res.writeHead(308, { Location:'/admin' }); res.end(); return; }
     if (pathname === '/' || pathname === '/gallery' || pathname === '/gallery/' || pathname.startsWith('/d/') || pathname.startsWith('/social/') || pathname === '/robots.txt') {
       await handlePublicPage(req, res, url); return;
     }

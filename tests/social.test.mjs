@@ -22,6 +22,18 @@ async function response(path, overrides = {}, method = 'GET') {
   return result;
 }
 
+test('admin page is an uncached, unindexed shell without editor, guest profile, or private data', async () => {
+  const result = await response('/admin', {
+    drawing:() => assert.fail('no drawing query'), prompt:() => assert.fail('no prompt query'),
+  });
+  assert.equal(result.status, 200);
+  assert.equal(result.headers['Cache-Control'], 'private, no-store');
+  assert.equal(result.headers['X-Robots-Tag'], 'noindex, nofollow');
+  assert.equal(result.headers['Referrer-Policy'], 'same-origin');
+  assert.match(result.body, /src\/admin-page.js/);
+  assert.doesNotMatch(result.body, /src\/home-page.js|src\/gallery-page.js|<canvas|github_login|csrf|client_secret/);
+});
+
 test('home and gallery serve social metadata without cookies or database access', async () => {
   for (const path of ['/', '/gallery', '/gallery?view=rate']) {
     const result = await response(path, { drawing: () => assert.fail('no drawing query'), prompt: () => assert.fail('no prompt query') });
@@ -44,7 +56,7 @@ test('old and readable drawing URLs credit the creator and advertise only the lo
   for (const path of ['/d/' + id, drawingPath(id, row.prompt)]) {
     const result = await response(path);
     assert.equal(result.status, 200);
-    assert.match(result.body, /artist drew a singing kite/);
+    assert.match(result.body, /artist drew a singing kite on sketchlet/);
     assert.ok(result.body.includes(`href="${origin}${drawingPath(id, row.prompt)}"`));
     assert.ok(result.body.includes(`${origin}/social/paintbrush-v1.png`));
     assert.doesNotMatch(result.body, /social\/drawing\//);
@@ -83,7 +95,15 @@ test('all social PNG URLs return the same square favicon without database or sto
 
 test('anonymous drawing links use someone rather than the sender identity', async () => {
   const result = await response('/d/' + id, { drawing: async () => ({ ...row, name: null }) });
-  assert.match(result.body, /someone drew a singing kite/);
+  assert.match(result.body, /someone drew a singing kite on sketchlet/);
+});
+
+test('removed drawing links reveal no creator metadata and public drawing pages cannot be cached', async () => {
+  const hidden = await response('/d/' + id, { drawing:async () => null });
+  assert.equal(hidden.status,404);
+  assert.doesNotMatch(hidden.body,/artist|singing kite|private-drawing/);
+  const visible = await response('/d/' + id);
+  assert.equal(visible.headers['Cache-Control'],'private, no-store');
 });
 
 test('missing or invalid public resources return 404, outages return noncacheable 503', async () => {

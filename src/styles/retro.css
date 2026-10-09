@@ -13,7 +13,7 @@ body{background:none}
 .studio-top{background:#663399;color:#fff;border-bottom:2px solid #362740;height:43px}
 .studio-title{color:#fff;font-weight:700}
 .save-status{color:#f2e4ff}
-.canvas-frame{border:3px solid;border-color:#6c6079 #fff #fff #6c6079;border-radius:0;box-shadow:0 0 0 1px #a296ad}
+.canvas-frame{border:3px solid;border-color:#6c6079 #b8b8b8 #b8b8b8 #6c6079;border-radius:0;box-shadow:0 0 0 1px #a296ad}
 .section-label h2,.history-label{color:#32124f;text-shadow:1px 1px #fff}
 .tool-button,.tool-switch .tool-button,.sizes button,.brush-styles button,.history-actions button,.download-button{
   background:#ded9e4;color:#271438;border:3px solid;border-color:#fff #74657f #74657f #fff;border-radius:0;box-shadow:1px 1px 0 #403249;transition:none

@@ -69,16 +69,16 @@ export async function createShareCard(drawing, { signal } = {}) {
     for (let y = 0; y < HEIGHT; y += 8) for (let x = 0; x < WIDTH; x += 8) {
       if ((x / 8 + y / 8) % 2 === 0) ctx.fillRect(x, y, 8, 8);
     }
-    // Keep the frame away from message-bubble clipping. A small upward optical
-    // offset gives the bottom edge/tail more breathing room without moving
-    // individual elements relative to one another.
+    // Keep the decorative frame fully in the PNG, but close enough to its
+    // edges to fall into messaging-preview clipping. Scale the contents
+    // independently so the artwork and text use more of the visible bubble.
     ctx.save();
-    const contentScale = .96;
-    ctx.translate(WIDTH * (1 - contentScale) / 2, HEIGHT * (1 - contentScale) / 2 - 16);
-    ctx.scale(contentScale, contentScale);
-    ctx.beginPath(); ctx.roundRect(46, 38, 1108, 844, 94);
+    ctx.beginPath(); ctx.roundRect(8, 8, WIDTH - 16, HEIGHT - 16, 94);
     ctx.fillStyle = '#d5d0d9'; ctx.fill();
     ctx.lineWidth = 12; ctx.strokeStyle = '#aaa0b5'; ctx.stroke();
+    const contentScale = 1.06;
+    ctx.translate(WIDTH * (1 - contentScale) / 2, HEIGHT * (1 - contentScale) / 2);
+    ctx.scale(contentScale, contentScale);
     ctx.textAlign = 'center';
     caption(ctx, drawingCaption(drawing.displayName, drawing.prompt), 600, 105, 1000, 78);
     text(ctx, formatPromptDate(drawing.date), 220, 190, 220, 32);

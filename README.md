@@ -109,6 +109,10 @@ Public gallery browsing currently covers up to 90 prompt dates and 200 drawings 
 
 ## keeping the pencils sharp
 
+The shared footer links to About, Privacy, and Community & Terms. These are visibly marked drafts, readable without JavaScript, and excluded from search indexing. Review the [public-page publication checklist](docs/PUBLIC-PAGES.md) before treating them as final policies. Deploying the current build makes the drafts publicly accessible.
+
+The footer also links to a standalone Contact page connected to Formspree. Successful submissions show an inline thank-you message and a return-home link; errors preserve the message. A hosted fallback supports spam challenges and visitors without JavaScript. See [contact setup and delivery checks](docs/CONTACT.md). It requires no new dependency or database table.
+
 Maintenance uses Node.js 22.20 or newer. Local credentials belong in `.env.local`; `.env.example` lists the required settings.
 
 | command | purpose |

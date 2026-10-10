@@ -73,6 +73,50 @@ function expectNoEditor(requests) {
   expect(requests).not.toContain('/src/submission.js');
 }
 
+test('contact confirms in Sketchlet and returns home after one submission', async ({ page }) => {
+  const { requests } = await fixture(page);
+  let submissions = 0;
+  await page.route('https://formspree.io/f/*', async route => {
+    submissions++;
+    expect(route.request().method()).toBe('POST');
+    expect(route.request().headers().accept).toBe('application/json');
+    await route.fulfill({ json:{ ok:true } });
+  });
+  await page.goto('/contact');
+  await page.getByLabel('message', { exact:true }).fill('a test message');
+  await page.getByRole('button', { name:'send message', exact:true }).click();
+  await expect(page.getByRole('heading', { name:'thanks for your message!' })).toBeFocused();
+  await expect(page.locator('.contact-form')).toBeHidden();
+  expect(submissions).toBe(1);
+  expectNoEditor(requests);
+  await page.getByRole('link', { name:'return to sketchlet' }).click();
+  await expect(page).toHaveURL('http://sketchlet.test/');
+});
+
+test('contact retains the message on rejection and network failure, then permits retry', async ({ page }) => {
+  await fixture(page);
+  let outcome = 'rejected';
+  await page.route('https://formspree.io/f/*', route => outcome === 'network'
+    ? route.abort()
+    : route.fulfill({ status:outcome === 'rejected' ? 400 : 200, json:{ ok:outcome === 'success' } }));
+  await page.goto('/contact');
+  const message = page.getByLabel('message', { exact:true });
+  const send = page.getByRole('button', { name:'send message', exact:true });
+  await message.fill('keep this message');
+  await send.click();
+  await expect(page.locator('#contact-hosted')).toBeVisible();
+  await expect(message).toHaveValue('keep this message');
+  await expect(page.locator('#contact-success')).toBeHidden();
+  outcome = 'network';
+  await send.click();
+  await expect(page.locator('#contact-status')).toContainText('retrying may send it twice');
+  await expect(message).toHaveValue('keep this message');
+  await expect(send).toBeEnabled();
+  outcome = 'success';
+  await send.click();
+  await expect(page.locator('#contact-success')).toBeVisible();
+});
+
 test('admin sign-in is separate from the guest site and remains disabled without configuration', async ({ page }) => {
   let configured = false;
   const { requests, errors } = await fixture(page, {
@@ -354,7 +398,8 @@ test('shared footer follows page content, aligns with the header, and stays out 
       const footer = page.locator('body > footer');
       await expect(page.locator('footer')).toHaveCount(1);
       await expect(footer).toBeVisible();
-      await expect(footer).toContainText('one drawing per day · final once saved');
+      await expect(footer).toContainText('© 2026 Michael Baker');
+      await expect(footer.getByRole('link', { name:'privacy', exact:true })).toHaveAttribute('href', '/privacy');
       const header = await page.locator('.site-header').boundingBox();
       const bounds = await footer.boundingBox();
       const main = await page.locator('main').boundingBox();
@@ -597,6 +642,52 @@ test('coalesced drawing measures canvas once per event after layout changes', as
     await expect(page.locator('#undo')).toBeEnabled();
   }
   expect(errors).toEqual([]);
+});
+
+test('mobile color menus keep close accessible while scrolling the complete palette', async ({ page }) => {
+  const {errors}=await fixture(page);
+  await page.setViewportSize({width:320,height:650});
+  await page.goto('/');
+  await expect(page.locator('#review-drawing')).toBeEnabled();
+  for (const fullScreen of [false,true]) {
+    if(fullScreen)await page.locator('.focus-launch').click();
+    await page.locator('[data-color-menu="background"]:visible').click();
+    const menu=page.getByRole('dialog',{name:'background',exact:true});
+    await expect(menu.locator('.color-menu-option')).toHaveCount(24);
+    const close=menu.getByRole('button',{name:'close colors'});
+    const before=await close.boundingBox();
+    const last=menu.locator('.color-menu-option').last();
+    await last.scrollIntoViewIfNeeded();
+    const after=await close.boundingBox();
+    expect(Math.abs(after.y-before.y)).toBeLessThan(1);
+    expect(after.y).toBeGreaterThanOrEqual(0);
+    expect(after.y+after.height).toBeLessThanOrEqual(650);
+    await last.click();
+    await expect(page.locator('[data-color-menu="background"]:visible')).toHaveAttribute('aria-label','background: black');
+    if(fullScreen)expect(await page.locator('.drawing-focus').evaluate(el=>el.scrollHeight<=el.clientHeight)).toBe(true);
+  }
+  expect(errors).toEqual([]);
+});
+
+test('freehand drawing includes a release position without a preceding move', async ({ page }) => {
+  await fixture(page);
+  await page.setViewportSize({width:320,height:650});
+  await page.goto('/');
+  await expect(page.locator('#review-drawing')).toBeEnabled();
+  const canvas=page.locator('#canvas');
+  await canvas.evaluate(element=>element.addEventListener('pointerdown',event=>{element.testPointerId=event.pointerId;},{once:true}));
+  const box=await canvas.boundingBox();
+  await page.mouse.move(box.x+box.width*.25,box.y+box.height*.5);
+  await page.mouse.down();
+  await canvas.evaluate(element=>{
+    const box=element.getBoundingClientRect();
+    element.dispatchEvent(new PointerEvent('pointerup',{pointerId:element.testPointerId,pointerType:'mouse',isPrimary:true,bubbles:true,
+      clientX:box.left+box.width*.75,clientY:box.top+box.height*.5}));
+  });
+  await page.mouse.up();
+  expect(await canvas.evaluate(c=>Array.from(c.getContext('2d').getImageData(850,600,1,1).data))).toEqual([52,48,68,255]);
+  await page.locator('#undo').click();
+  expect(await canvas.evaluate(c=>Array.from(c.getContext('2d').getImageData(850,600,1,1).data))).toEqual([255,255,255,255]);
 });
 
 test('320 by 650 touch workspace fits controls and draws upward from the extra strip', async ({ page, isMobile }) => {

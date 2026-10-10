@@ -4,6 +4,7 @@ import { drawingIdFromPath, drawingPath } from '../src/drawing-links.js';
 import { formatPromptDate } from '../src/prompts.js';
 import { drawingCaption } from '../src/text-format.js';
 import { renderPageShell } from './page-shell.mjs';
+import { informationPage } from './information-pages.mjs';
 
 const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const dateValid = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
@@ -59,6 +60,13 @@ export async function handlePublicPage(req, res, url, dependencies = {}) {
   try {
     const origin = dependencies.origin || publicOrigin();
     const path = url.pathname;
+    const information = informationPage(path);
+    if (information) {
+      const slug = path.replace(/^\//, '').replace(/\/$/, '').replace(/\.html$/, '');
+      const html = renderPageShell(`${slug}.html`).replace(/<title>[\s\S]*?<\/title>/, socialTags({ path:`/${slug}`, title:`${information.label} — sketchlet`, description:information.draft === false ? 'Send Michael a note about sketchlet.' : 'A draft information page for sketchlet.' }, origin));
+      res.writeHead(200, { 'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store', ...(information.draft === false ? {} : { 'X-Robots-Tag':'noindex, nofollow' }) });
+      res.end(req.method === 'HEAD' ? undefined : html); return;
+    }
     if (path === '/admin' || path === '/admin/') {
       // Only the sign-in shell is public. Admin data is always session-gated.
       res.writeHead(200, { 'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'private, no-store',

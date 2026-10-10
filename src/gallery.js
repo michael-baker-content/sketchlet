@@ -286,7 +286,7 @@ function showDrawing(drawing) {
     show(title('your drawing') + `<div class="empty-state"><p>your drawing for “${escape(drawing.prompt)}” is not public.</p><p>${escape(drawing.reason)}</p><p>it still counts as your submission for ${escape(formatPromptDate(drawing.date))}. a replacement cannot be submitted.</p></div>`);
     wireHome(); return;
   }
-  show(title(drawing.mine?'your drawing':drawing.prompt)+`<div class="submission-layout"><img class="finished-drawing" alt="${escape(drawing.prompt)}"><div class="submission-info"><h2>${escape(drawing.prompt)}</h2><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time></p><p class="rating-total">${escape(ratingText(drawing))}</p>${drawing.mine && today?`<div class="streak-box"><strong>${counted(state.streak, 'day')}</strong><span>drawing streak</span></div>`:''}<div class="drawing-actions"><button class="web-button" id="copy-drawing-link" type="button">copy link</button><button class="web-button" id="share-drawing-card" type="button">share card</button><button class="web-button primary" id="start-rating">rate drawings</button></div><p class="muted share-status" id="share-status" role="status"></p>${!drawing.mine && drawing.myVote?`<p>your rating: ${drawing.myVote} / 5</p>`:''}</div></div>`);
+  show(title(drawing.mine?'your drawing':drawing.prompt)+`<div class="submission-layout"><img class="finished-drawing" alt="${escape(drawing.prompt)}"><div class="submission-info"><h2>${escape(drawing.prompt)}</h2><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time></p><p class="rating-total">${escape(ratingText(drawing))}</p>${drawing.mine && today?`<div class="streak-box"><strong>${counted(state.streak, 'day')}</strong><span>drawing streak</span></div>`:''}<div class="drawing-actions"><button class="web-button" id="copy-drawing-link" type="button">copy link</button><button class="web-button" id="share-drawing-card" type="button">share card</button><button class="web-button" id="start-rating">rate drawings</button></div><p class="muted share-status" id="share-status" role="status"></p>${!drawing.mine && drawing.myVote?`<p>your rating: ${drawing.myVote} / 5</p>`:''}</div></div>`);
   panel.querySelector('img').src=drawing.image;
   addReportButton(drawing,panel.querySelector('.drawing-actions'));
   panel.querySelector('.submission-info h2').insertAdjacentHTML('afterend', authorMarkup(drawing));
@@ -320,7 +320,7 @@ function showDrawing(drawing) {
     navigationAddress = pageAddress();
   }
   wireHome();
-  $('#start-rating').textContent = drawing.mine ? 'rate drawings' : drawing.myVote ? 'edit your rating' : 'rate this drawing';
+  $('#start-rating').textContent = drawing.mine ? 'rate drawings' : drawing.myVote ? 'edit rating' : 'rate drawing';
   $('#start-rating').onclick=()=>startRating(drawing.mine ? null : drawing.id);
   // Rating is available independently of submitting a drawing.
 }
@@ -399,7 +399,7 @@ async function openArchive(){
   showLoading('gallery');
   try{
     const days=await viewApi('/api/archive');if(generation!==viewGeneration)return;
-    show(title('gallery','home')+`<div class="gallery-actions"><button class="web-button primary" id="gallery-rate">rate drawings</button></div><div class="archive-grid">${days.length?days.map(day=>`<button class="archive-card prompt-card" data-date="${escape(day.date)}"><img src="${escape(day.image)}" alt="drawing for ${escape(day.prompt)}" loading="lazy" decoding="async"><span>${escape(day.prompt)}</span><small><time class="display-date">${escape(formatPromptDate(day.date))}</time> · ${counted(day.count, 'drawing')}</small></button>`).join(''):'<p>no drawings yet. yours could be the first.</p>'}</div>`);wireHome();
+    show(title('gallery','home')+`<div class="gallery-actions"><button class="web-button primary" id="gallery-rate">rate drawings</button></div><div class="archive-grid prompt-grid">${days.length?days.map(day=>`<button class="archive-card prompt-card" data-date="${escape(day.date)}"><img src="${escape(day.image)}" alt="drawing for ${escape(day.prompt)}" loading="lazy" decoding="async"><span>${escape(day.prompt)}</span><small><time class="display-date">${escape(formatPromptDate(day.date))}</time>${counted(day.count, 'drawing')}</small></button>`).join(''):'<p>no drawings yet. yours could be the first.</p>'}</div>`);wireHome();
     $('#gallery-rate').onclick=()=>startRating();
     panel.querySelectorAll('[data-date]').forEach(button=>button.onclick=()=>gallery(button.dataset.date));
   }catch(error){if(generation===viewGeneration)errorScreen(error);}

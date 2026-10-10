@@ -305,6 +305,7 @@ drawingSurface.addEventListener('pointermove', event => {
 function finish(event) {
   if (!active || event.pointerId !== pointerId) return;
   if (active.style === 'line' && event.type === 'pointerup') active.points[1] = canvasPoint(event, canvas.getBoundingClientRect(), CANVAS_SIZE, true);
+  else if (event.type === 'pointerup') appendPointerSamples(active.points, event, inputRect(event), CANVAS_SIZE, true);
   if (active.style === 'line' && ['pointercancel', 'lostpointercapture'].includes(event.type)) {
     if (frame !== null) { cancelAnimationFrame(frame); frame = null; }
     active = null; pointerId = null; render(); return;

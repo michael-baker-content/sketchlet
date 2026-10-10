@@ -9,11 +9,14 @@
     "api/pages.js": { "maxDuration": 30, "includeFiles": "src/assets/favicon.svg" }
   },
   "redirects": [
+    { "source": "/:page(about|privacy|community|contact).html", "destination": "/:page", "permanent": true },
     { "source": "/admin.html", "destination": "/admin", "permanent": true },
     { "source": "/index.html", "destination": "/", "permanent": true },
     { "source": "/gallery.html", "destination": "/gallery", "permanent": true }
   ],
   "rewrites": [
+    { "source": "/:page(about|privacy|community|contact)", "destination": "/api/pages?__page=/:page" },
+    { "source": "/:page(about|privacy|community|contact)/", "destination": "/api/pages?__page=/:page" },
     { "source": "/api/:path*", "destination": "/api/index?__sketchlet_path=:path*" },
     { "source": "/", "destination": "/api/pages?__page=/" },
     { "source": "/admin", "destination": "/api/pages?__page=/admin" },

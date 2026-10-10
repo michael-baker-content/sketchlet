@@ -7,6 +7,24 @@ import { drawingPath } from '../src/drawing-links.js';
 const id = '12345678-1234-1234-1234-123456789abc';
 const row = { id, prompt: 'singing kite', date: '2026-10-02', name: 'artist', object_key: 'private-drawing.png' };
 const origin = 'https://sketchlet.example';
+test('information drafts are readable without JavaScript, cookies, or database access', async () => {
+  for (const slug of ['about', 'privacy', 'community']) {
+    for (const suffix of ['', '/', '.html']) {
+      const result = await response(`/${slug}${suffix}`, {
+        drawing:() => assert.fail('no drawing query'), prompt:() => assert.fail('no prompt query'),
+      });
+      assert.equal(result.status, 200);
+      assert.equal(result.headers['X-Robots-Tag'], 'noindex, nofollow');
+      assert.match(result.body, /draft for review/);
+      assert.match(result.body, /<h2>/);
+      assert.match(result.body, new RegExp(`href="/${slug}" aria-current="page"`));
+      assert.doesNotMatch(result.body, /<script|<canvas|please enable javascript|class="empty-state"/);
+    }
+    const head = await response(`/${slug}`, {}, 'HEAD');
+    assert.equal(head.status, 200);
+    assert.equal(head.body, undefined);
+  }
+});
 async function response(path, overrides = {}, method = 'GET') {
   const result = {};
   await handlePublicPage({ method }, {

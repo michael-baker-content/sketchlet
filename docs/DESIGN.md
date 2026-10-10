@@ -90,7 +90,7 @@ Finger input targets 24 screen pixels above contact, including line and fill. A 
 
 ## Share card layout
 
-The 1200×920 PNG centers its content at 85% scale, leaving decorative outer margins. The main container has a 48px rounded corner radius so it sits more naturally inside messaging previews. Branding, date, caption, ratings, and site information occupy a narrow left column; the drawing occupies a large square area on the right and remains uncropped. Ratings are a snapshot at generation time; the “ratings when shared” label is omitted. Link previews remain logo-only and separate from these explicitly generated cards.
+The 1200×920 PNG uses a flat rounded container at (44,38), sized 1108×844 with a 94px radius and a solid 12px muted-lavender border. Only the checkerboard background reaches the image edges. The creator/prompt caption is centered across the top in a 1000px-wide, 78px-high budget; text shrinks and wraps as needed. The date and a single solid divider sit above bottom-to-top vertical branding and the tagline on the left. The original artwork fits a 704px square at (380,140), clipped at 70px rounded corners with an 8px solid border. No bevel, ratings, rating count, or hostname appears on the card. Artwork proportions are preserved, with only the rounded corners masked. Link previews remain logo-only and separate from these explicitly generated cards.
 
 ## Accessibility
 

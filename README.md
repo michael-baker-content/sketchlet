@@ -19,7 +19,7 @@ When you're ready:
 - **save to gallery** publishes your drawing after a confirmation. You get one submission per day, and it's final once saved.
 - **download** keeps a PNG on your device. It doesn't publish anything or use your daily submission.
 
-Each published drawing has its own shareable link, where you can return to see its ratings. Links include the prompt name and a compact identifier; use **copy link** beside the rating button to share one. **Share card** creates a retro PNG with your drawing, prompt, date, name, and a snapshot of its ratings. Preview it, copy the image, or download it when your browser does not support image copying. Cards are generated on your device and are not uploaded. Older UUID links still work. Drawing on consecutive days builds your participation streak.
+Each published drawing has its own shareable link, where you can return to see its ratings. Links include the prompt name and a compact identifier; use **copy link** beside the rating button to share one. **Share card** creates a retro PNG focused on your drawing, with a creator-and-prompt caption, date, and vertical sketchlet branding. The rounded card uses solid borders and omits ratings and the URL. Preview it, copy the image, or download it when your browser does not support image copying. Cards are generated on your device and are not uploaded. Older UUID links still work. Drawing on consecutive days builds your participation streak.
 
 ## inside the pencil case
 

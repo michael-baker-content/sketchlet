@@ -1,18 +1,9 @@
 import { formatPromptDate } from './prompts.js';
 import { setCloseIcon } from './close-button.js';
-import { counted, drawingCaption } from './text-format.js';
+import { drawingCaption } from './text-format.js';
 
 const WIDTH = 1200, HEIGHT = 920;
 const FONT = '"Unkempt", cursive';
-
-function bevel(ctx, x, y, width, height, fill, inset = false) {
-  ctx.fillStyle = fill; ctx.fillRect(x, y, width, height);
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = inset ? '#74657f' : '#ffffff';
-  ctx.beginPath(); ctx.moveTo(x, y + height); ctx.lineTo(x, y); ctx.lineTo(x + width, y); ctx.stroke();
-  ctx.strokeStyle = inset ? '#ffffff' : '#74657f';
-  ctx.beginPath(); ctx.moveTo(x + width, y); ctx.lineTo(x + width, y + height); ctx.lineTo(x, y + height); ctx.stroke();
-}
 
 function text(ctx, value, x, y, width, size, { bold = false, color = '#32124f', minimum = 18 } = {}) {
   ctx.fillStyle = color;
@@ -29,7 +20,7 @@ function text(ctx, value, x, y, width, size, { bold = false, color = '#32124f', 
 }
 
 function caption(ctx, value, x, y, width, height) {
-  let lines, size = 40;
+  let lines, size = 44;
   for (; size >= 22; size--) {
     ctx.font = `700 ${size}px ${FONT}`;
     lines = [''];
@@ -46,9 +37,11 @@ function caption(ctx, value, x, y, width, height) {
   }
   size = Math.max(22,size);
   const maximum = Math.floor(height / (size * 1.25));
-  lines.slice(0,maximum).forEach((line,index) => text(ctx,
+  const visible = lines.slice(0,maximum);
+  // y is the center baseline of the heading region. Center multiple lines too.
+  visible.forEach((line,index) => text(ctx,
     index === maximum - 1 && lines.length > maximum ? line + '…' : line,
-    x,y + index * size * 1.25,width,size,{bold:true,minimum:size}));
+    x,y + (index - (visible.length - 1) / 2) * size * 1.25,width,size,{bold:true,minimum:size,color:'#503666'}));
 }
 
 export async function createShareCard(drawing, { signal } = {}) {
@@ -76,33 +69,34 @@ export async function createShareCard(drawing, { signal } = {}) {
     for (let y = 0; y < HEIGHT; y += 8) for (let x = 0; x < WIDTH; x += 8) {
       if ((x / 8 + y / 8) % 2 === 0) ctx.fillRect(x, y, 8, 8);
     }
-    // Leave breathing room around the content for messaging previews.
-    // The PNG dimensions stay unchanged; only decorative checks reach its edges.
-    const contentScale = .85;
+    // Flat rounded frame; only the decorative checkerboard reaches the edges.
     ctx.save();
-    ctx.translate(WIDTH * (1 - contentScale) / 2, HEIGHT * (1 - contentScale) / 2);
-    ctx.scale(contentScale, contentScale);
-    ctx.beginPath(); ctx.roundRect(24, 24, WIDTH - 48, HEIGHT - 48, 48);
+    ctx.beginPath(); ctx.roundRect(44, 38, 1108, 844, 94);
     ctx.fillStyle = '#d5d0d9'; ctx.fill();
-    ctx.lineWidth = 4; ctx.strokeStyle = '#827294'; ctx.stroke();
-    const gradient = ctx.createLinearGradient(56, 0, 310, 0);
+    ctx.lineWidth = 12; ctx.strokeStyle = '#aaa0b5'; ctx.stroke();
+    ctx.textAlign = 'center';
+    caption(ctx, drawingCaption(drawing.displayName, drawing.prompt), 600, 105, 1000, 78);
+    text(ctx, formatPromptDate(drawing.date), 220, 190, 220, 32);
+    ctx.fillStyle = '#aaa0b5'; ctx.fillRect(126, 213, 188, 6);
+
+    // Rotate the branding as a unit so it reads from bottom to top.
+    ctx.save();
+    ctx.translate(220, 535); ctx.rotate(-Math.PI / 2);
+    const gradient = ctx.createLinearGradient(-300, 0, 300, 0);
     gradient.addColorStop(0, '#4a147b'); gradient.addColorStop(.55, '#743d91'); gradient.addColorStop(1, '#a43f68');
-    text(ctx, 'sketchlet', 64, 137, 292, 68, { bold: true, color: gradient });
-    text(ctx, formatPromptDate(drawing.date), 64, 183, 292, 29);
-    ctx.fillStyle = '#827294'; ctx.fillRect(64, 211, 292, 2); ctx.fillRect(64, 217, 292, 2);
-    caption(ctx, drawingCaption(drawing.displayName, drawing.prompt), 64, 273, 292, 300);
-    // Keep the artwork square and uncropped; only the enclosing card is rounded.
-    bevel(ctx, 384, 80, 760, 760, '#ffffff', true);
-    const edge = 752, scale = Math.min(edge / image.naturalWidth, edge / image.naturalHeight);
+    text(ctx, 'sketchlet', 0, 0, 600, 140, { bold:true, color:gradient });
+    text(ctx, 'a little drawing every day', 0, 76, 580, 44, { bold:true, color:'#503666' });
+    ctx.restore();
+
+    // Fit the original artwork without stretching; round only its corners.
+    const edge = 704, scale = Math.min(edge / image.naturalWidth, edge / image.naturalHeight);
     const iw = image.naturalWidth * scale, ih = image.naturalHeight * scale;
-    ctx.drawImage(image, 388 + (edge - iw) / 2, 84 + (edge - ih) / 2, iw, ih);
-    ctx.fillStyle = '#827294';
-    for (const y of [590,730]) ctx.fillRect(64, y, 292, 2);
-    const rated = drawing.count > 0 && Number.isFinite(drawing.average);
-    text(ctx, rated ? `${drawing.average.toFixed(1)} / 5` : 'not rated yet', 64, 654, 292, rated ? 54 : 36, { bold: true });
-    text(ctx, counted(drawing.count || 0, 'rating'), 64, 699, 292, 29);
-    text(ctx, 'a little drawing every day', 64, 778, 292, 29, { bold: true });
-    text(ctx, location.host, 64, 824, 292, 26, { bold: true });
+    ctx.beginPath(); ctx.roundRect(380, 140, edge, edge, 70);
+    ctx.fillStyle = '#ffffff'; ctx.fill();
+    ctx.save(); ctx.clip();
+    ctx.drawImage(image, 380 + (edge - iw) / 2, 140 + (edge - ih) / 2, iw, ih);
+    ctx.restore();
+    ctx.lineWidth = 8; ctx.strokeStyle = '#b4afb8'; ctx.stroke();
     ctx.restore();
     return await new Promise((resolve, reject) => canvas.toBlob(blob => {
       if (blob) resolve(blob); else reject(new Error('could not create the card. please try again.'));

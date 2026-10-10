@@ -64,20 +64,12 @@ export async function createShareCard(drawing, { signal } = {}) {
     canvas.width = WIDTH; canvas.height = HEIGHT;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('could not create the card. please try again.');
-    ctx.fillStyle = '#d6c6ec'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
-    ctx.fillStyle = '#ffffff26';
-    for (let y = 0; y < HEIGHT; y += 8) for (let x = 0; x < WIDTH; x += 8) {
-      if ((x / 8 + y / 8) % 2 === 0) ctx.fillRect(x, y, 8, 8);
-    }
-    // Keep the decorative frame fully in the PNG, but close enough to its
-    // edges to fall into messaging-preview clipping. Scale the contents
-    // independently so the artwork and text use more of the visible bubble.
+    ctx.fillStyle = '#d5d0d9'; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+    // Preserve the content's breathing room and upward optical offset while
+    // letting the solid background extend through the message-bubble edges.
     ctx.save();
-    ctx.beginPath(); ctx.roundRect(8, 8, WIDTH - 16, HEIGHT - 16, 94);
-    ctx.fillStyle = '#d5d0d9'; ctx.fill();
-    ctx.lineWidth = 12; ctx.strokeStyle = '#aaa0b5'; ctx.stroke();
-    const contentScale = 1.06;
-    ctx.translate(WIDTH * (1 - contentScale) / 2, HEIGHT * (1 - contentScale) / 2);
+    const contentScale = .96;
+    ctx.translate(WIDTH * (1 - contentScale) / 2, HEIGHT * (1 - contentScale) / 2 - 16);
     ctx.scale(contentScale, contentScale);
     ctx.textAlign = 'center';
     caption(ctx, drawingCaption(drawing.displayName, drawing.prompt), 600, 105, 1000, 78);

@@ -7,6 +7,23 @@ import { drawingPath } from '../src/drawing-links.js';
 const id = '12345678-1234-1234-1234-123456789abc';
 const row = { id, prompt: 'singing kite', date: '2026-10-02', name: 'artist', object_key: 'private-drawing.png' };
 const origin = 'https://sketchlet.example';
+
+test('custom domain metadata uses sketchlet.app without changing local development', () => {
+  assert.equal(publicOrigin({}),'http://localhost:5173');
+  assert.equal(publicOrigin({VERCEL:'1'}),'https://sketchlet.app');
+  assert.equal(publicOrigin({VERCEL:'1',VERCEL_PROJECT_PRODUCTION_URL:'legacy.vercel.app',APP_ORIGIN:'https://sketchlet.app'}),'https://sketchlet.app');
+});
+
+test('account preview serves a private shell without loading guest or drawing data', async () => {
+  const result = await response('/profile', {
+    drawing:() => assert.fail('no drawing query'), prompt:() => assert.fail('no prompt query'),
+  });
+  assert.equal(result.status,200);
+  assert.equal(result.headers['Cache-Control'],'private, no-store');
+  assert.equal(result.headers['X-Robots-Tag'],'noindex, nofollow');
+  assert.match(result.body,/src\/profile-page.js/);
+  assert.doesNotMatch(result.body,/<canvas|sk_test_|sk_live_|src\/home-page.js|src\/gallery-page.js/);
+});
 test('information drafts are readable without JavaScript, cookies, or database access', async () => {
   for (const slug of ['about', 'privacy', 'community']) {
     for (const suffix of ['', '/', '.html']) {

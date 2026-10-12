@@ -12,12 +12,12 @@ The owner runs the commands and configures credentials. No additional npm packag
 
 1. Run `npm run db:migrate` to apply `db/004_admin_foundation.sql` and `db/005_moderation.sql`. The migrations create OAuth challenges, admin sessions, action history, drawing moderation, reports, and a shared public-drawings view. Run this **even if sign-in already works**, before restarting/deploying the new code. Existing drawings stay public, and no drawings or votes are deleted.
 2. Register a **dedicated GitHub OAuth app** under GitHub Settings → Developer settings → OAuth Apps. Do not reuse an app that has repository permissions. This integration requests no additional scopes and only reads the signed-in account's public identity.
-3. For production, use the site's exact origin as the homepage URL and append `/api/admin/callback` for the authorization callback URL. For the current domain, those values are `https://sketchlet-blush.vercel.app` and `https://sketchlet-blush.vercel.app/api/admin/callback`.
+3. For production, use `https://sketchlet.app` as the homepage URL and `https://sketchlet.app/api/admin/callback` as the authorization callback URL. Update these in the production GitHub app when switching domains; keep the local app on localhost.
 4. Set the following variables in Vercel's **Production** environment. Keep the client secret out of Git and chat.
 
 | variable | value |
 | --- | --- |
-| `ADMIN_ORIGIN` | `https://sketchlet-blush.vercel.app` (or the chosen canonical domain, with no trailing slash) |
+| `ADMIN_ORIGIN` | `https://sketchlet.app` (no trailing slash) |
 | `ADMIN_GITHUB_ID` | Your account's numeric GitHub user ID, not its username |
 | `GITHUB_CLIENT_ID` | The OAuth app's client ID |
 | `GITHUB_CLIENT_SECRET` | The OAuth app's client secret |

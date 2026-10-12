@@ -1,3 +1,4 @@
+import { mountProfilePhoto } from './profile-details.js';
 import { api } from './api-client.js';
 import { counted } from './text-format.js';
 import { easternDate, promptForDate, formatPromptDate } from './prompts.js';
@@ -35,7 +36,7 @@ function rememberName(name) {
   try { localStorage.setItem(nameStorageKey, name); } catch {}
 }
 function authorMarkup(drawing) {
-  const name = drawing.mine ? displayName : drawing.displayName;
+  const name = drawing.displayName ?? (drawing.mine ? displayName : '');
   return `<span class="drawing-author"${drawing.mine ? ' data-own-author' : ''}>by ${escape(name || 'anonymous')}</span>`;
 }
 async function saveName(value) {
@@ -49,169 +50,36 @@ function prepareIntro() {
   if (intro) intro.innerHTML = '<div class="daily-heading"><div><p class="prompt-date"></p><h1></h1></div></div>';
 }
 prepareIntro();
-const nameButton = document.createElement('button');
-nameButton.className = 'name-nav'; nameButton.textContent = 'profile';
-nameButton.setAttribute('aria-haspopup', 'dialog');
-$('.site-header nav').append(nameButton);
+mountProfilePhoto();
 const nameDialog = document.createElement('dialog');
 nameDialog.className = 'submission-dialog';
-nameDialog.setAttribute('aria-labelledby', 'name-heading');
-nameDialog.innerHTML = '<form method="dialog"><h2 id="name-heading">profile</h2><div class="profile-photo"><img id="profile-photo-preview" alt="your local profile photo" hidden><label class="name-field">photo (optional)<input id="profile-photo-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif" aria-describedby="profile-photo-note"></label><button class="web-button" id="remove-profile-photo" type="button" hidden>remove photo</button><p id="profile-photo-note" class="muted">only saved in this browser. your photo is not uploaded or visible to others.</p><p id="profile-photo-status" role="status"></p></div><label class="name-field">name (optional)<input id="profile-name" maxlength="32" autocomplete="nickname" aria-describedby="profile-name-note"></label><p id="profile-name-note" class="muted">your name is shown on all your drawings, including earlier ones. leave blank to appear as anonymous.</p><p id="name-error" role="alert"></p><div class="dialog-actions"><button class="web-button" value="cancel">cancel</button><button class="web-button primary" id="save-name" type="submit">save profile</button></div></form>';
+nameDialog.setAttribute('aria-labelledby','name-heading');
+nameDialog.innerHTML = '<form><h2 id="name-heading">add a name to rate</h2><label class="name-field">name<input id="profile-name" required maxlength="32" autocomplete="nickname"></label><p>your name also appears on your drawings.</p><p id="name-error" role="alert"></p><div class="dialog-actions"><button class="web-button" type="button" id="cancel-name">cancel</button><button class="web-button" id="save-name">save name</button></div></form>';
 document.body.append(nameDialog);
-const profileDrawings = document.createElement('section');
-profileDrawings.className = 'profile-drawings';
-profileDrawings.setAttribute('aria-labelledby', 'profile-drawings-heading');
-profileDrawings.innerHTML = '<h3 id="profile-drawings-heading">your drawings</h3><p class="muted">saved from this browser, newest first.</p><div class="profile-drawing-list"></div><p class="profile-drawing-status" role="status"></p><button class="web-button profile-drawings-more" type="button" hidden>load more</button>';
-nameDialog.append(profileDrawings);
-let profileDrawingsRevision = 0, profileNext = null;
-const profileMore = profileDrawings.querySelector('button');
-profileMore.onclick = () => loadProfileDrawings(profileNext);
-async function loadProfileDrawings(before = null) {
-  const revision = ++profileDrawingsRevision;
-  const list = profileDrawings.querySelector('.profile-drawing-list');
-  const status = profileDrawings.querySelector('[role="status"]');
-  if (!before) list.replaceChildren();
-  profileMore.hidden = true;
-  status.textContent = 'loading your drawings…';
-  try {
-    const result = await api(`/api/profile/drawings${before ? `?before=${encodeURIComponent(before)}` : ''}`);
-    if (revision !== profileDrawingsRevision || !nameDialog.open) return;
-    for (const drawing of result.drawings) {
-      const card = document.createElement('a');
-      card.className = 'profile-drawing-card';
-      card.href = drawing.url;
-      card.innerHTML = `${drawing.removed ? '' : `<img src="${escape(drawing.image)}" alt="${escape(drawing.prompt)}" loading="lazy" decoding="async">`}<span><strong>${escape(drawing.prompt)}</strong><time class="display-date" datetime="${escape(drawing.date)}">${escape(formatPromptDate(drawing.date))}</time><small>${escape(drawing.removed ? drawing.reason : ratingText(drawing))}</small></span>`;
-      if (drawing.removed) card.onclick = event => { event.preventDefault(); nameDialog.close(); showDrawing(drawing); };
-      list.append(card);
-    }
-    profileNext = result.next;
-    status.textContent = list.children.length ? '' : 'no drawings yet. save your first drawing to the gallery to see it here.';
-    profileMore.textContent = 'load more';
-    profileMore.hidden = !profileNext;
-  } catch (error) {
-    if (revision !== profileDrawingsRevision || !nameDialog.open) return;
-    status.textContent = error.message;
-    profileNext = before;
-    profileMore.textContent = 'try again';
-    profileMore.hidden = false;
-  }
-}
-nameDialog.querySelector('[value="cancel"]').type = 'button';
-nameDialog.querySelector('[value="cancel"]').onclick = () => { if (!savingName) nameDialog.close(); };
 let savingName = false;
-const photoStorageKey = 'sketchlet.profilePhoto';
-let savedPhoto = '', pendingPhoto = '', photoRevision = 0, processingPhoto = false;
-function readProfilePhoto() {
-  try {
-    const value = localStorage.getItem(photoStorageKey) || '';
-    return value.length <= 200000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(value) ? value : '';
-  } catch { return ''; }
-}
-const navPhoto = document.createElement('img');
-navPhoto.className = 'nav-profile-photo';
-navPhoto.alt = 'your profile photo';
-navPhoto.width = navPhoto.height = 32;
-navPhoto.hidden = true;
-$('.site-header nav').append(navPhoto);
-function syncNavPhoto() {
-  const photo = readProfilePhoto();
-  navPhoto.hidden = !photo;
-  if (photo) navPhoto.src = photo; else navPhoto.removeAttribute('src');
-}
-navPhoto.onerror = () => { navPhoto.hidden = true; };
-window.addEventListener('storage', event => {
-  if (event.key === photoStorageKey || event.key === null) syncNavPhoto();
-});
-syncNavPhoto();
-function showProfilePhoto() {
-  const preview = $('#profile-photo-preview');
-  preview.hidden = !pendingPhoto;
-  if (pendingPhoto) preview.src = pendingPhoto; else preview.removeAttribute('src');
-  $('#remove-profile-photo').hidden = !pendingPhoto;
-}
-function openProfile(forRating = false) {
-  if (!forRating) pendingRating = null;
+function openProfile() {
+  if (nameDialog.open) return;
   $('#profile-name').value = displayName; $('#name-error').textContent = '';
-  $('#profile-name').required = forRating;
-  $('#profile-name').closest('label').firstChild.textContent = forRating ? 'name' : 'name (optional)';
-  $('#profile-name-note').textContent = forRating ? 'a name is required to rate drawings. it also appears on your drawings.' : 'your name is shown on all your drawings, including earlier ones. leave blank to appear as anonymous.';
-  $('#name-heading').textContent = forRating ? 'add a name to rate' : 'profile';
-  savedPhoto = pendingPhoto = readProfilePhoto();
-  $('#profile-photo-file').value = ''; $('#profile-photo-status').textContent = '';
-  showProfilePhoto(); nameDialog.showModal();
-  profileDrawings.hidden = forRating;
-  if (forRating) $('#profile-name').focus();
-  if (!forRating) loadProfileDrawings();
+  nameDialog.showModal(); $('#profile-name').focus();
 }
-nameButton.onclick = () => openProfile();
-nameDialog.addEventListener('close', () => {
-  photoRevision++; processingPhoto = false; $('#save-name').disabled = false;
-  const canceledRating = pendingRating;
-  pendingRating = null;
-  if (canceledRating?.generation === viewGeneration) openArchive();
-});
-nameDialog.addEventListener('close', () => { profileDrawingsRevision++; });
-$('#remove-profile-photo').onclick = () => {
-  photoRevision++; processingPhoto = false; pendingPhoto = '';
-  $('#profile-photo-file').value = ''; $('#profile-photo-status').textContent = '';
-  $('#save-name').disabled = false; showProfilePhoto();
-};
-$('#profile-photo-file').onchange = async event => {
-  const revision = ++photoRevision, file = event.target.files[0];
-  processingPhoto = false; $('#save-name').disabled = false;
-  $('#profile-photo-status').textContent = '';
-  if (!file) return;
-  $('#name-error').textContent = '';
-  if (!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type) || file.size > 10 * 1024 * 1024) {
-    $('#name-error').textContent = 'choose a jpg, png, webp, or gif under 10 mb.'; return;
-  }
-  processingPhoto = true; $('#save-name').disabled = true;
-  $('#profile-photo-status').textContent = 'preparing photo…';
-  const url = URL.createObjectURL(file);
-  try {
-    const image = new Image(); image.src = url; await image.decode();
-    if (revision !== photoRevision || !nameDialog.open) return;
-    if (!image.naturalWidth || !image.naturalHeight || image.naturalWidth * image.naturalHeight > 40000000) throw new Error('choose a smaller photo.');
-    const thumbnail = document.createElement('canvas'); thumbnail.width = thumbnail.height = 256;
-    const context = thumbnail.getContext('2d');
-    context.fillStyle = '#fff'; context.fillRect(0, 0, 256, 256);
-    const edge = Math.min(image.naturalWidth, image.naturalHeight);
-    context.drawImage(image, (image.naturalWidth - edge) / 2, (image.naturalHeight - edge) / 2, edge, edge, 0, 0, 256, 256);
-    const photo = thumbnail.toDataURL('image/jpeg', .85);
-    if (photo.length > 200000) throw new Error('choose a smaller photo.');
-    pendingPhoto = photo; showProfilePhoto();
-    $('#profile-photo-status').textContent = 'photo ready — save profile to keep it.';
-  } catch (error) {
-    if (revision === photoRevision) { $('#name-error').textContent = error.message === 'choose a smaller photo.' ? error.message : 'could not read this photo. try a jpg or png.'; $('#profile-photo-status').textContent = ''; }
-  } finally {
-    URL.revokeObjectURL(url);
-    if (revision === photoRevision) { processingPhoto = false; $('#save-name').disabled = false; }
-  }
-};
+$('#cancel-name').onclick = () => { if (!savingName) nameDialog.close(); };
 nameDialog.addEventListener('cancel', event => { if (savingName) event.preventDefault(); });
-nameDialog.querySelector('form').addEventListener('submit', async event => {
-  event.preventDefault(); if (savingName || processingPhoto) return;
-  if (pendingRating && !$('#profile-name').value.trim()) { $('#name-error').textContent='enter a name to rate drawings.'; return; }
-  savingName = true;
-  const controls = nameDialog.querySelectorAll('button,input'); controls.forEach(control => { control.disabled = true; });
-  try {
-    if (pendingRating || $('#profile-name').value !== displayName) await saveName($('#profile-name').value);
-    if (pendingPhoto !== savedPhoto) {
-      try {
-        if (pendingPhoto) localStorage.setItem(photoStorageKey, pendingPhoto);
-        else localStorage.removeItem(photoStorageKey);
-      } catch { throw new Error('could not save the photo in this browser. try freeing some browser storage.'); }
-      savedPhoto = pendingPhoto;
-      syncNavPhoto();
-    }
-    const resume = pendingRating;
-    pendingRating = null;
-    nameDialog.close();
-    if (resume) setTimeout(() => { if(resume.generation === viewGeneration)resume.run(); }, 0);
-  }
-  catch (error) { $('#name-error').textContent = error.message; }
-  finally { savingName = false; controls.forEach(control => { control.disabled = false; }); }
+nameDialog.addEventListener('close', () => {
+  const canceled = pendingRating; pendingRating = null;
+  if (canceled?.generation === viewGeneration) openArchive();
 });
+nameDialog.querySelector('form').onsubmit = async event => {
+  event.preventDefault(); if (savingName) return;
+  if (!$('#profile-name').value.trim()) { $('#name-error').textContent = 'enter a name to rate drawings.'; return; }
+  savingName = true;
+  const controls = nameDialog.querySelectorAll('input,button'); controls.forEach(control => { control.disabled = true; });
+  try {
+    await saveName($('#profile-name').value);
+    const resume = pendingRating; pendingRating = null; nameDialog.close();
+    if (resume?.generation === viewGeneration) resume.run();
+  } catch (error) { $('#name-error').textContent = error.message; }
+  finally { savingName = false; controls.forEach(control => { control.disabled = false; }); }
+};
 function header() {
   if (!intro) return;
   $('.prompt-date').textContent=formatPromptDate(state.date);
@@ -223,7 +91,7 @@ async function adoptDay(next) {
   const changed = next.date !== state.date;
   if (editor && !next.submission) await editor.setPromptDay(next.date);
   state = next; header();
-  if (typeof next.displayName === 'string') rememberName(next.displayName);
+  rememberName(next.displayName || '');
   if (editorUI) $('#review-drawing').disabled = !connected;
   if (changed) editorUI?.dayChanged();
   return changed;
@@ -481,7 +349,7 @@ async function attachEditor() {
   });
 }
 if (editor) await attachEditor();
-if (typeof today?.displayName === 'string') rememberName(today.displayName);
+if (today) rememberName(today.displayName || '');
 if (page === 'home') {
   let checkingDay = false;
   async function checkDay(force = false) {

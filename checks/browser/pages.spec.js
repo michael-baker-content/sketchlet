@@ -56,6 +56,8 @@ async function fixture(page, overrides = {}, { emptyDraft = false } = {}) {
       '/api/queue': [],
       '/api/admin/reports': { items:[],next:null },
       '/api/admin/drawings': { items:[],next:null },
+      '/api/account/sign-out': {ok:true},
+      '/api/account/config': {enabled:false},
     };
     if (url.pathname in data) return route.fulfill({ json: data[url.pathname] });
     const file = publicFile(url.pathname);
@@ -72,6 +74,191 @@ function expectNoEditor(requests) {
   expect(requests).not.toContain('/src/editor.html');
   expect(requests).not.toContain('/src/submission.js');
 }
+
+test('account preview verifies sign-in on the server and signs out without loading drawings', async ({ page }) => {
+  let registrations = 0;
+  const { requests, errors } = await fixture(page, {
+    '/api/account/config': route => route.fulfill({ json:{enabled:true,publishableKey:'pk_test_fixture',frontendHost:'fixture.clerk.accounts.dev'} }),
+    '/api/account/register': route => {
+      expect(route.request().headers().authorization).toBe('Bearer fixture-session-token');
+      expect(route.request().postDataJSON()).toEqual({});
+      registrations++;
+      return route.fulfill({json:{authenticated:true,registered:true}});
+    },
+    '/api/account/guest-preview': route => route.fulfill({json:{drawings:[
+      {date:'2026-10-10',prompt:'a singing kite',conflict:false},
+      {date:'2026-10-09',prompt:'two dancing snails',conflict:true},
+    ],hasMore:false}}),
+  });
+  await page.route('https://fixture.clerk.accounts.dev/**', route => route.fulfill({contentType:'text/javascript',body:route.request().url().includes('/ui@') ? 'window.__internal_ClerkUICtor = {};' : `
+    const listeners = [];
+    window.Clerk = {
+      session:{id:'session_fixture', getToken:async () => 'fixture-session-token'},
+      load:async options => { window.fixtureClerkOptions = options; }, addListener(fn) { listeners.push(fn); },
+      mountSignIn(el) { el.textContent = 'fixture sign-in'; }, unmountSignIn(el) { el.replaceChildren(); },
+      async signOut() { this.session = null; listeners.forEach(fn => fn()); }
+    };
+  `}));
+  await page.goto('/profile');
+  await expect(page.locator('#account-status')).toContainText('your account is connected');
+  await expect(page.locator('#account-status')).toHaveAttribute('data-state','success');
+  await expect(page.locator('#guest-review-list')).toContainText('a singing kite — would be linked');
+  await expect(page.locator('#guest-review-list')).toContainText('two dancing snails — would be hidden');
+  expect(await page.evaluate(() => window.fixtureClerkOptions.signInForceRedirectUrl)).toBe('http://sketchlet.test/profile');
+  expect(await page.evaluate(() => window.fixtureClerkOptions.signUpForceRedirectUrl)).toBe('http://sketchlet.test/profile');
+  expect(registrations).toBe(1);
+  await page.getByRole('button',{name:'sign out',exact:true}).click();
+  await expect(page.locator('#account-sign-in')).toHaveText('fixture sign-in');
+  await expect(page.locator('#guest-review')).toBeHidden();
+  await expect(page.locator('#account-status')).toContainText('you’re signed out');
+  expectNoEditor(requests);
+  expect(requests).not.toContain('/api/today');
+  expect(requests).toContain('/api/profile');
+  expect(errors).toEqual([]);
+});
+
+test('account connection retries verification and ignores a drawing review arriving after sign-out', async ({ page }) => {
+  let attempts = 0, finishReview;
+  await fixture(page, {
+    '/api/account/config': route => route.fulfill({json:{enabled:true,publishableKey:'pk_test_fixture',frontendHost:'fixture.clerk.accounts.dev'}}),
+    '/api/account/register': route => ++attempts === 1
+      ? route.fulfill({status:503,json:{error:'could not connect your account'}})
+      : route.fulfill({json:{authenticated:true,registered:true}}),
+    '/api/account/guest-preview': async route => {
+      await new Promise(resolve => { finishReview = resolve; });
+      await route.fulfill({json:{drawings:[{date:'2026-10-10',prompt:'a singing kite',conflict:false}],hasMore:false}});
+    },
+  });
+  await page.route('https://fixture.clerk.accounts.dev/**', route => route.fulfill({contentType:'text/javascript',body:route.request().url().includes('/ui@') ? 'window.__internal_ClerkUICtor = {};' : `
+    const listeners = [];
+    window.Clerk = {
+      session:null, load:async () => {}, addListener(fn) { listeners.push(fn); },
+      mountSignIn(el, options) { window.fixtureSignInOptions = options; el.textContent = 'fixture sign-in'; },
+      unmountSignIn(el) { el.replaceChildren(); },
+      async signOut() { this.session = null; listeners.forEach(fn => fn()); }
+    };
+    window.fixtureSignIn = () => {
+      window.Clerk.session = {id:'new_session',getToken:async () => 'fixture-token'};
+      listeners.forEach(fn => fn());
+    };
+  `}));
+  await page.goto('/profile');
+  await expect(page.locator('#account-sign-in')).toHaveText('fixture sign-in');
+  expect(await page.evaluate(() => window.fixtureSignInOptions.forceRedirectUrl)).toBe('http://sketchlet.test/profile');
+  await page.evaluate(() => window.fixtureSignIn());
+  await expect(page.locator('#account-status')).toHaveAttribute('data-state','error');
+  await expect(page.locator('#guest-review')).toBeHidden();
+  await page.getByRole('button',{name:'retry account connection',exact:true}).click();
+  await expect(page.locator('#account-status')).toHaveAttribute('data-state','success');
+  await expect(page.locator('#account-status')).toBeFocused();
+  await expect.poll(() => typeof finishReview).toBe('function');
+  await page.getByRole('button',{name:'sign out',exact:true}).click();
+  finishReview();
+  await expect(page.locator('#account-status')).toContainText('you’re signed out');
+  await expect(page.locator('#guest-review')).toBeHidden();
+  await expect(page.locator('#guest-review-list')).toBeEmpty();
+});
+
+test('account preview handles missing Clerk setup without touching the gallery', async ({ page }) => {
+  const { requests } = await fixture(page, {
+    '/api/account/config': route => route.fulfill({json:{enabled:false}}),
+  });
+  await page.goto('/profile');
+  await expect(page.locator('#account-status')).toContainText('account sign-in is not available yet.');
+  await expect(page.locator('#page-loader')).toBeHidden();
+  expectNoEditor(requests);
+});
+
+test('profile editing reads the active identity name instead of a cached guest name', async ({page}) => {
+  await fixture(page,{
+    '/api/profile': route => route.fulfill({json:{displayName:'account artist'}}),
+  });
+  await page.addInitScript(() => localStorage.setItem('sketchlet.displayName','old guest'));
+  await page.goto('/gallery');
+  await page.getByRole('link',{name:'profile',exact:true}).click();
+  await expect(page.locator('#profile-name')).toHaveValue('account artist');
+});
+
+test('standalone guest profile saves a name without loading the drawing editor', async ({page}) => {
+  let saved;
+  const {requests} = await fixture(page,{
+    '/api/profile': route => {
+      if (route.request().method() === 'POST') saved = route.request().postDataJSON().displayName;
+      return route.fulfill({json:{displayName:saved || 'original name'}});
+    },
+  });
+  await page.goto('/profile');
+  await expect(page.locator('#profile-name')).toBeEnabled();
+  await page.locator('#profile-name').fill('new artist');
+  await page.getByRole('button',{name:'save profile',exact:true}).click();
+  await expect(page.locator('#profile-edit-status')).toHaveText('profile saved');
+  expect(saved).toBe('new artist');
+  await expect(page.locator('.profile-drawing-list')).toContainText(drawing.prompt);
+  expectNoEditor(requests);
+  expect(requests).not.toContain('/api/today');
+});
+
+test('guest linking needs explicit consent and a changed review must be confirmed again', async ({ page }) => {
+  let reviews = 0, links = 0;
+  await fixture(page, {
+    '/api/account/config': route => route.fulfill({json:{enabled:true,publishableKey:'pk_test_fixture',frontendHost:'fixture.clerk.accounts.dev'}}),
+    '/api/account/register': route => route.fulfill({json:{authenticated:true,registered:true}}),
+    '/api/account/guest-preview': route => route.fulfill({json:{revision:String(++reviews).repeat(32),drawings:[
+      {date:'2026-10-10',prompt:'a singing kite',conflict:reviews>1},
+    ]}}),
+    '/api/account/link-guest': route => {
+      links++;
+      expect(route.request().headers().authorization).toBe('Bearer fixture-token');
+      expect(route.request().postDataJSON()).toEqual({revision:String(links).repeat(32)});
+      return links === 1 ? route.fulfill({status:409,json:{error:'your drawings changed'}})
+        : route.fulfill({json:{linked:0,hidden:1,alreadyLinked:false}});
+    },
+  });
+  await page.route('https://fixture.clerk.accounts.dev/**', route => route.fulfill({contentType:'text/javascript',body:route.request().url().includes('/ui@') ? 'window.__internal_ClerkUICtor = {};' : `
+    window.Clerk = {session:{id:'fixture',getToken:async () => 'fixture-token'},load:async()=>{},addListener(){}};
+  `}));
+  await page.goto('/profile');
+  const confirm = page.getByRole('button',{name:'link guest work',exact:true});
+  await expect(confirm).toBeVisible();
+  await confirm.click();
+  expect(links).toBe(0);
+  await page.locator('#guest-link-consent').check();
+  await confirm.click();
+  await expect(page.locator('#guest-review-status')).toContainText('your drawings changed');
+  await expect(confirm).toBeHidden();
+  await page.getByRole('button',{name:'retry drawing review',exact:true}).click();
+  await expect(page.locator('#guest-review-list')).toContainText('would be hidden');
+  await expect(page.locator('#guest-link-consent')).not.toBeChecked();
+  await page.locator('#guest-link-consent').check();
+  await confirm.click();
+  await expect(page.locator('#guest-review-status')).toContainText('0 drawings linked; 1 drawing hidden');
+  await expect(confirm).toBeHidden();
+  expect(links).toBe(2);
+});
+
+for (const expired of [false,true]) test(`remembered account ${expired ? 'expiry blocks guest fallback' : 'owns the home request'}`, async ({page}) => {
+  let todayRequests = 0;
+  await fixture(page,{
+    '/api/account/config': route => route.fulfill({json:{enabled:true,publishableKey:'pk_test_fixture',frontendHost:'fixture.clerk.accounts.dev'}}),
+    '/api/today': route => {
+      todayRequests++;
+      expect(route.request().headers().authorization).toBe('Bearer account-token');
+      return route.fulfill({json:{...today,submission:drawing}});
+    },
+  });
+  await page.addInitScript(() => localStorage.setItem('sketchlet.account-session','1'));
+  await page.route('https://fixture.clerk.accounts.dev/**', route => route.fulfill({contentType:'text/javascript',body:route.request().url().includes('/ui@') ? 'window.__internal_ClerkUICtor = {};' : `
+    window.Clerk = {session:${expired ? 'null' : "{id:'fixture',getToken:async () => 'account-token'}"},load:async()=>{}};
+  `}));
+  await page.goto('/');
+  if (expired) {
+    await expect(page.getByRole('link',{name:'go to profile',exact:true})).toBeVisible();
+    expect(todayRequests).toBe(0);
+  } else {
+    await expect(page.locator('img.finished-drawing')).toBeVisible();
+    expect(todayRequests).toBe(1);
+  }
+});
 
 test('contact confirms in Sketchlet and returns home after one submission', async ({ page }) => {
   const { requests } = await fixture(page);
@@ -221,7 +408,7 @@ test('removed submission shows its reason without an editor, image, or sharing a
   await expect(page.locator('#page-content')).toContainText('removed as spam.');
   await expect(page.locator('#page-content')).toContainText('a replacement cannot be submitted');
   await expect(page.locator('#begin-drawing,#copy-drawing-link,.finished-drawing,canvas')).toHaveCount(0);
-  await page.getByRole('button',{name:'profile',exact:true}).click();
+  await page.getByRole('link',{name:'profile',exact:true}).click();
   await expect(page.locator('.profile-drawing-list')).toContainText('removed as spam.');
   await expect(page.locator('.profile-drawing-list img')).toHaveCount(0);
   expectNoEditor(requests);expect(errors).toEqual([]);
@@ -437,11 +624,10 @@ test('page headings, skip navigation, and profile dialogs support keyboard acces
     await page.evaluate(() => window.skipTraversal);
     await expect(page.getByRole('main')).toBeFocused();
     expect(requests.filter(path => path.startsWith('/api/')).length).toBe(apiCount);
-    const profile = page.getByRole('button', { name:'profile', exact:true });
+    const profile = page.getByRole('link', { name:'profile', exact:true });
     await profile.focus(); await page.keyboard.press('Enter');
-    await expect(page.getByRole('dialog', { name:'profile', exact:true })).toBeVisible();
-    await page.keyboard.press('Escape');
-    await expect(profile).toBeFocused();
+    await expect(page).toHaveURL(/\/profile$/);
+    await expect(page.locator('#profile-name')).toBeEnabled();
   }
 });
 

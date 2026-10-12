@@ -5,6 +5,7 @@ export const PUBLIC_FILES = [...PAGE_FILES, 'src/editor.html', 'src/home-page.js
 PUBLIC_FILES.push('src/loading.js', 'src/styles/loading.css', 'src/draft-storage.js', 'src/assets/favicon.svg', 'src/text-format.js');
 PUBLIC_FILES.push('src/admin-page.js');
 PUBLIC_FILES.push('src/contact.js');
+PUBLIC_FILES.push('src/profile-page.js', 'src/account-client.js', 'src/profile-details.js');
 PUBLIC_FILES.push('src/prompt-calendar.js');
 PUBLIC_FILES.push('src/moderation-options.js', 'src/report-dialog.js', 'src/admin-moderation.js');
 const files = new Set(PUBLIC_FILES);
@@ -12,6 +13,7 @@ export function publicFile(pathname) {
   const slug = pathname.replace(/^\//, '').replace(/\/$/, '');
   if (informationPages.has(slug)) return `${slug}.html`;
   if (pathname === '/') return 'index.html';
+  if (pathname === '/profile' || pathname === '/profile/') return 'profile.html';
   if (pathname === '/admin' || pathname === '/admin/') return 'admin.html';
   if (pathname === '/gallery' || pathname === '/gallery/' || drawingIdFromPath(pathname)) return 'gallery.html';
   const candidate = pathname.slice(1);

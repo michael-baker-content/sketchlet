@@ -6,6 +6,7 @@ import { publicFile } from './public-files.mjs';
 import { handlePublicPage } from './social.mjs';
 import { handleAdmin } from './admin.mjs';
 import { informationPage } from './information-pages.mjs';
+import { handleAccount } from './account.mjs';
 
 const types = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml' };
 const configured = ['DATABASE_URL', 'AWS_ENDPOINT_URL_S3', 'AWS_REGION', 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'].every(key => !!process.env[key]);
@@ -20,6 +21,12 @@ http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
     const pathname = decodeURIComponent(url.pathname);
+    if (pathname === '/api/account' || pathname.startsWith('/api/account/')) {
+      await handleAccount(req, res, pathname); return;
+    }
+    if (pathname === '/profile' || pathname === '/profile/' || pathname === '/profile.html') {
+      await handlePublicPage(req, res, url); return;
+    }
     if (pathname === '/api/admin' || pathname.startsWith('/api/admin/')) {
       await handleAdmin(req, res, pathname); return;
     }

@@ -64,6 +64,10 @@ test('deployment publishes only dist and routes drawing URLs to the app',async()
   assert.equal(publicFile('/gallery'),'gallery.html');
   assert.equal(publicFile('/gallery/'),'gallery.html');
   assert.equal(publicFile('/admin'),'admin.html');
+  assert.equal(publicFile('/profile'),'profile.html');
+  assert.ok(config.rewrites.some(rule=>rule.source==='/profile' && rule.destination==='/api/pages?__page=/profile'));
+  assert.equal(publicFile('/backend/account.mjs'),null);
+  assert.equal(publicFile('/backend/account-auth.mjs'),null);
   assert.ok(config.rewrites.some(rule=>rule.source==='/admin' && rule.destination==='/api/pages?__page=/admin'));
   assert.ok(config.redirects.some(rule=>rule.source==='/admin.html' && rule.destination==='/admin'));
   assert.equal(publicFile('/gallery/private'),null);

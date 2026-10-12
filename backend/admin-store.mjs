@@ -48,12 +48,14 @@ export function createAdminStore(databaseUrl) {
     },
     async submissions(before, filter) {
       return sql`SELECT d.id,d.prompt_day::text AS date,p.title AS prompt,profile.display_name,
-        coalesce(m.status,'public') AS status,coalesce(m.public_reason,'') AS reason,
+        CASE WHEN c.drawing_id IS NOT NULL THEN 'hidden' ELSE coalesce(m.status,'public') END AS status,
+        coalesce(c.reason,m.public_reason,'') AS reason,c.drawing_id IS NOT NULL AS link_conflict,
         (SELECT count(*)::int FROM sketchlet_reports r WHERE r.drawing_id=d.id AND r.status='open') AS reports
         FROM sketchlet_drawings d JOIN sketchlet_prompts p ON p.day=d.prompt_day
         LEFT JOIN sketchlet_profiles profile ON profile.owner_hash=d.owner_hash
         LEFT JOIN sketchlet_drawing_moderation m ON m.drawing_id=d.id
-        WHERE (${filter}='all' OR coalesce(m.status,'public')=${filter})
+        LEFT JOIN sketchlet_link_conflicts c ON c.drawing_id=d.id
+        WHERE (${filter}='all' OR CASE WHEN c.drawing_id IS NOT NULL THEN 'hidden' ELSE coalesce(m.status,'public') END=${filter})
           AND (${before}::uuid IS NULL OR (d.created_at,d.id)<(SELECT created_at,id FROM sketchlet_drawings WHERE id=${before}::uuid))
         ORDER BY d.created_at DESC,d.id DESC LIMIT 25`;
     },
@@ -70,6 +72,7 @@ export function createAdminStore(databaseUrl) {
         sql`WITH previous AS MATERIALIZED (
           SELECT d.id,coalesce(m.status,'public') AS status,coalesce(m.public_reason,'') AS reason
           FROM sketchlet_drawings d LEFT JOIN sketchlet_drawing_moderation m ON m.drawing_id=d.id WHERE d.id=${id}
+            AND (${status}<>'public' OR NOT EXISTS(SELECT 1 FROM sketchlet_link_conflicts c WHERE c.drawing_id=d.id))
         ), changed AS (
           INSERT INTO sketchlet_drawing_moderation(drawing_id,status,public_reason,updated_by)
           SELECT id,${status},${input.reason},${user.id} FROM previous WHERE true
@@ -97,11 +100,14 @@ export function createAdminStore(databaseUrl) {
     },
     async reports(before, status) {
       return sql`SELECT r.id::text,r.drawing_id,r.category,r.explanation,r.status,r.created_at,
-        d.prompt_day::text AS date,p.title AS prompt,profile.display_name,coalesce(m.status,'public') AS drawing_status
+        d.prompt_day::text AS date,p.title AS prompt,profile.display_name,
+        CASE WHEN c.drawing_id IS NOT NULL THEN 'hidden' ELSE coalesce(m.status,'public') END AS drawing_status,
+        c.drawing_id IS NOT NULL AS link_conflict
         FROM sketchlet_reports r JOIN sketchlet_drawings d ON d.id=r.drawing_id
         JOIN sketchlet_prompts p ON p.day=d.prompt_day
         LEFT JOIN sketchlet_profiles profile ON profile.owner_hash=d.owner_hash
         LEFT JOIN sketchlet_drawing_moderation m ON m.drawing_id=d.id
+        LEFT JOIN sketchlet_link_conflicts c ON c.drawing_id=d.id
         WHERE r.status=${status} AND (${before}::bigint IS NULL OR r.id<${before}::bigint)
         ORDER BY r.id DESC LIMIT 25`;
     },

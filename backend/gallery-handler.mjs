@@ -1,4 +1,5 @@
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
+import { guestVisitor } from './guest-identity.mjs';
 import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
 import { easternDate, promptForDate } from '../src/prompts.js';
@@ -9,15 +10,13 @@ import { normalizeDisplayName, profileDrawingCursor } from './profile.mjs';
 import { requireRatingName, validateVote, networkLimitKey, parseSkipped, balanceRatingQueue } from './ratings.mjs';
 import { reportInput, drawingIdPattern } from './moderation.mjs';
 
-export function createGalleryHandler({ sql, storage, bucket, sendImage, origins = allowedOrigins() }) {
+export function createGalleryHandler({ sql, storage, bucket, sendImage, resolveOwner, origins = allowedOrigins() }) {
 const origin = origins.values().next().value || 'https://sketchlet.invalid';
 const secure = !!process.env.VERCEL || origin.startsWith('https:');
 function json(res, status, body) { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(body)); }
 function fail(status, message) { throw Object.assign(new Error(message), { status }); }
 function visitor(req, res) {
-  let token = (req.headers.cookie || '').match(/(?:^|;\s*)sketchlet_guest=([a-f0-9]{64})(?:;|$)/)?.[1];
-  if (!token) { token = randomBytes(32).toString('hex'); res.setHeader('Set-Cookie', `sketchlet_guest=${token}; HttpOnly; SameSite=Lax; Path=/; Max-Age=31536000${secure ? '; Secure' : ''}`); }
-  return createHash('sha256').update(token).digest('hex');
+  return guestVisitor(req, res, secure);
 }
 async function limit(owner, maximum = 40) {
   const [record] = await sql`INSERT INTO sketchlet_rate_limits(key_hash,window_start,request_count) VALUES (${owner},now(),1)
@@ -46,6 +45,7 @@ async function drawings(owner, day = null, id = null, queue = false) {
     LEFT JOIN sketchlet_profiles profile ON profile.owner_hash=d.owner_hash
     LEFT JOIN sketchlet_drawing_moderation m ON m.drawing_id=d.id
     WHERE (${day}::date IS NULL OR d.prompt_day=${day}::date) AND (${id}::uuid IS NULL OR d.id=${id}::uuid)
+    AND NOT EXISTS(SELECT 1 FROM sketchlet_link_conflicts conflict WHERE conflict.drawing_id=d.id)
     AND (EXISTS(SELECT 1 FROM sketchlet_public_drawings visible WHERE visible.id=d.id)
       OR (${id}::uuid IS NOT NULL AND d.owner_hash=${owner}))
     AND (NOT ${queue} OR (d.owner_hash<>${owner} AND NOT EXISTS(SELECT 1 FROM sketchlet_votes v WHERE v.drawing_id=d.id AND v.voter_hash=${owner})))
@@ -66,7 +66,7 @@ return async function handleApi(req, res, pathname) {
     if (!['GET', 'POST'].includes(req.method)) fail(405, 'method not allowed');
     res.setHeader('Cache-Control','private, no-store');
     if (req.method === 'POST' && !origins.has(req.headers.origin)) fail(403, 'request origin does not match this site');
-    const owner = visitor(req, res);
+    const owner = resolveOwner ? await resolveOwner(req, res, secure) : visitor(req, res);
     if(req.method==='POST' || pathname==='/api/queue') {
       const network = networkLimitKey(req);
       if (network) await limit(network, 120);
@@ -75,7 +75,7 @@ return async function handleApi(req, res, pathname) {
     const url = new URL(req.url, origin);
     if (pathname === '/api/profile/drawings' && req.method === 'GET') {
       const before = profileDrawingCursor(url.searchParams.get('before'));
-      // The authenticated guest cookie is the only ownership filter. One entry per day
+      // Verified account identity or the active guest cookie determines ownership. One entry per day
       // makes the prompt date a stable cursor even when new drawings are submitted.
       const rows = await sql`SELECT d.id,d.prompt_day::text AS day,p.title,d.owner_hash,profile.display_name,m.status,m.public_reason,
         (SELECT avg(stars) FROM sketchlet_votes v WHERE v.drawing_id=d.id) AS average,
@@ -84,6 +84,7 @@ return async function handleApi(req, res, pathname) {
         LEFT JOIN sketchlet_profiles profile ON profile.owner_hash=d.owner_hash
         LEFT JOIN sketchlet_drawing_moderation m ON m.drawing_id=d.id
         WHERE d.owner_hash=${owner} AND (${before}::date IS NULL OR d.prompt_day<${before}::date)
+          AND NOT EXISTS(SELECT 1 FROM sketchlet_link_conflicts conflict WHERE conflict.drawing_id=d.id)
         ORDER BY d.prompt_day DESC LIMIT 25`;
       const page = rows.slice(0,24);
       json(res,200,{drawings:page.map(row=>publicDrawing(row,owner)),next:rows.length>24?page.at(-1).day:null}); return;
@@ -95,7 +96,7 @@ return async function handleApi(req, res, pathname) {
     if (pathname === '/api/profile' && req.method === 'POST') {
       const input = await body(req);
       const displayName = normalizeDisplayName(input.displayName);
-      // Ownership comes only from the guest cookie, never a submitted name or id.
+      // Ownership comes from the resolved identity, never a submitted name or id.
       await sql`INSERT INTO sketchlet_profiles(owner_hash,display_name) VALUES (${owner},${displayName})
         ON CONFLICT(owner_hash) DO UPDATE SET display_name=EXCLUDED.display_name,updated_at=now()`;
       json(res, 200, { displayName }); return;
@@ -211,6 +212,7 @@ return async function handleApi(req, res, pathname) {
     }
     fail(404,'not found');
   } catch (error) {
+    if (error.code === 'P0001') { json(res,409,{error:'your account or drawing ownership changed. please refresh before trying again.'}); return; }
     if (error.status) { if(error.status===429)res.setHeader('Retry-After','60'); json(res,error.status,{error:error.message,...(error.code ? {code:error.code} : {})}); }
     else { console.error('Gallery request failed. Verify migrations, Neon connectivity, and bucket access.'); json(res,503,{error:'the gallery is temporarily unavailable. your draft is still on this device.'}); }
   }

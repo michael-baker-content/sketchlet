@@ -61,6 +61,12 @@ export function mountModeration(root, { request, onExpired, onSaved }) {
     const form = dialog.querySelector('form'), action = form.elements.action, reason = form.elements.reason;
     for (const [key,label] of Object.entries(removalReasons)) reason.add(new Option(label,key));
     if ((item.drawing_status || item.status) !== 'public') action.value = 'restore';
+    if (item.link_conflict) {
+      action.querySelector('[value="restore"]').remove();
+      action.querySelector('[value="clear_name"]').remove();
+      action.value = 'hide';
+      dialog.querySelector('form .muted').textContent = 'this drawing is hidden because of an account-linking conflict, not a moderation decision. moderation cannot restore it.';
+    }
     if (item.drawing_id && item.status === 'open') action.add(new Option('resolve this report','resolve'));
     function sync() { dialog.querySelector('#reason-field').hidden = action.value !== 'hide'; }
     action.onchange = sync; sync();

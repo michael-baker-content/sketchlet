@@ -4,6 +4,7 @@ const pages = new Map([
   ['index.html', { title:'sketchlet - a little drawing every day', label:'today', script:'/src/home-page.js' }],
   ['gallery.html', { title:'gallery — sketchlet', label:'gallery', script:'/src/gallery-page.js' }],
   ['admin.html', { title:'admin — sketchlet', label:'administration', script:'/src/admin-page.js' }],
+  ['profile.html', { title:'profile — sketchlet', label:'profile', script:'/src/profile-page.js', draft:true }],
 ]);
 for (const [slug, page] of informationPages) pages.set(`${slug}.html`, { ...page, title:`${page.label} — sketchlet`, draft:page.draft !== false });
 
@@ -39,7 +40,7 @@ export function renderPageShell(file) {
   ${page.content ? '' : '<noscript><p>please enable javascript to use sketchlet.</p></noscript>'}
   <header class="site-header">
     <a class="brand" href="/" aria-label="sketchlet home">sketchlet</a>
-    <nav aria-label="main navigation"><a id="open-home" href="/">home</a><a id="open-archive" href="/gallery">gallery</a></nav>
+    <nav aria-label="main navigation"><a id="open-home" href="/">home</a><a id="open-archive" href="/gallery">gallery</a><a href="/profile"${file === 'profile.html' ? ' aria-current="page"' : ''}>profile</a></nav>
   </header>
   <main id="main-content" tabindex="-1">
     <section id="page-content" class="flow-panel" aria-labelledby="page-heading">

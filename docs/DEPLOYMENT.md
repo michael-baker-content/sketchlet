@@ -4,6 +4,8 @@ Vercel serves public assets from `dist/`, runs the application API through `api/
 
 ## 1. Check locally
 
+Accounts use `@clerk/backend`, migrations `006_accounts.sql` and `007_guest_linking.sql`, and optional Clerk keys. Follow [ACCOUNTS.md](ACCOUNTS.md) for local and disposable-database verification. `/profile` is an in-development account page, not a completed public accounts/groups release. Guest linking now changes ownership only after confirmation. Apply migrations before running the updated server; no additional dependency is needed if Clerk is installed. The no-migration notes below describe earlier footer/contact changes only.
+
 You control terminal commands and server processes. These commands do not deploy the website:
 
 ```powershell
@@ -77,7 +79,15 @@ Copy these values directly from your local `.env.local` into the project's **Pro
 
 `DATABASE_URL_UNPOOLED` and `NEON_BRANCH` are not needed by the running site. Migrations are run explicitly from your terminal, never automatically by Vercel's build.
 
-For a custom domain, also set `APP_ORIGIN` to its exact HTTPS origin, such as `https://your-domain.example` (no path). For the initial Vercel domain, omit `APP_ORIGIN`: the handler accepts the exact deployment, branch, and production URLs provided by Vercel system environment variables. Keep automatic system environment variables enabled. Never copy the local `APP_ORIGIN=http://localhost:5173` value into Vercel.
+Set Production `APP_ORIGIN=https://sketchlet.app` (no path). This selects the canonical address for social metadata and permits requests from the custom domain. Keep automatic system environment variables enabled so the API also recognizes exact Vercel deployment URLs during the transition. Never copy the local `APP_ORIGIN=http://localhost:5173` value into Vercel.
+
+### Moving to sketchlet.app
+
+The domain was purchased through Vercel. Associate it with this project's Production deployment and wait for valid DNS/TLS configuration. Then set Production `APP_ORIGIN` and `ADMIN_ORIGIN` to `https://sketchlet.app`, update the production GitHub app callback to `https://sketchlet.app/api/admin/callback`, and redeploy. Configure Clerk's production instance for `sketchlet.app` and use its production keys in Vercel; keep development keys and localhost origins in `.env.local`. Do not assume a development Clerk account and a production Clerk account are the same identity: mappings are intentionally scoped to the instance.
+
+Keep `sketchlet-blush.vercel.app` accessible without an automatic redirect while planning guest migration. Cookies, drafts, and local photos belong to their original origin and are not moved by DNS or a redirect. Published drawings remain in the same Neon database. Guest linking must occur on the origin holding the guest cookie, using the intended account instance; verify Clerk supports the old origin's sign-in flow before promising migration through that address. Linking on localhost cannot claim the old public site's guest drawings. Cross-origin transfer of guest credentials or drafts is not implemented.
+
+The repository now uses `sketchlet.app` in public documentation and as the production metadata fallback. Runtime share links and Clerk return URLs remain relative to the site being used, preserving local testing and old links. This repository change does not edit Vercel environment variables, DNS, Clerk settings, or GitHub callbacks.
 
 Deploy after entering the variables. Updating environment settings later requires a redeployment.
 

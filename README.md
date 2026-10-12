@@ -4,7 +4,7 @@ a crying dog. a laughing kite. your interpretation.
 
 Sketchlet is a daily drawing playground with a soft spot for the old web: purple panels, chunky buttons, handwritten type, and room for a very silly drawing. A quick doodle belongs here just as much as something you've spent an hour on.
 
-[**draw today's prompt →**](https://sketchlet-blush.vercel.app/)
+[**draw today's prompt →**](https://sketchlet.app/)
 
 ## a little drawing every day
 
@@ -45,7 +45,7 @@ When drawing with a finger, the hollow cursor targets 24 screen pixels above you
 
 ## take a look around
 
-The [gallery](https://sketchlet-blush.vercel.app/gallery) groups drawings by prompt. Each prompt's preview shows its highest-rated drawing, or its newest submission if nobody has rated one yet.
+The [gallery](https://sketchlet.app/gallery) groups drawings by prompt. Each prompt's preview shows its highest-rated drawing, or its newest submission if nobody has rated one yet.
 
 You can rate drawings **before making your own**. Add a name to your profile, then give drawings 1–5 stars or skip. The queue mixes today's drawings, older prompts, under-rated entries, and favorites. Your own drawings stay out of the queue, and you can revise an earlier vote from a drawing's page.
 
@@ -53,7 +53,7 @@ Old prompts remain open for looking and rating; new submissions belong to today'
 
 ## your little corner
 
-There is no login. Sketchlet remembers this browser using a guest cookie.
+You can draw as a guest, remembered by a browser cookie. Optional Clerk accounts are in pre-release verification; the profile page supports account sign-in when configured.
 
 Your profile holds an optional display name and a newest-first collection of **your drawings**, with dates and ratings. Changing your name updates the attribution on earlier drawings too. Names aren't unique or verified; leaving yours blank displays “anonymous.” A name is required for rating.
 
@@ -108,6 +108,8 @@ The `/admin` page supports owner-only GitHub sign-in, submission and report revi
 Public gallery browsing currently covers up to 90 prompt dates and 200 drawings per prompt. Your profile's drawing list loads in pages of 24.
 
 ## keeping the pencils sharp
+
+The dedicated `/profile` page contains name/photo editing, personal drawings, and optional account controls. Clerk sessions map to internal Neon accounts, and guest work can be linked after explicit review and confirmation. Existing account drawings win same-day conflicts; conflicting guest drawings are hidden. Friend groups are planned separately. See [account setup, required database verification, and the groups plan](docs/ACCOUNTS.md) before releasing accounts.
 
 The shared footer links to About, Privacy, and Community & Terms. These are visibly marked drafts, readable without JavaScript, and excluded from search indexing. Review the [public-page publication checklist](docs/PUBLIC-PAGES.md) before treating them as final policies. Deploying the current build makes the drafts publicly accessible.
 

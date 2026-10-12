@@ -10,7 +10,7 @@ const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;
 const dateValid = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
 const uuid = /^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/;
 export function publicOrigin(env = process.env) {
-  const value = env.APP_ORIGIN || (env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://' + env.VERCEL_PROJECT_PRODUCTION_URL : env.VERCEL ? 'https://sketchlet-blush.vercel.app' : 'http://localhost:5173');
+  const value = env.APP_ORIGIN || (env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://' + env.VERCEL_PROJECT_PRODUCTION_URL : env.VERCEL ? 'https://sketchlet.app' : 'http://localhost:5173');
   const url = new URL(value);
   if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('Invalid APP_ORIGIN');
   return url.origin;
@@ -60,6 +60,10 @@ export async function handlePublicPage(req, res, url, dependencies = {}) {
   try {
     const origin = dependencies.origin || publicOrigin();
     const path = url.pathname;
+    if (path === '/profile' || path === '/profile/' || path === '/profile.html') {
+      res.writeHead(200, { 'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'private, no-store', 'X-Robots-Tag':'noindex, nofollow' });
+      res.end(req.method === 'HEAD' ? undefined : renderPageShell('profile.html')); return;
+    }
     const information = informationPage(path);
     if (information) {
       const slug = path.replace(/^\//, '').replace(/\/$/, '').replace(/\.html$/, '');

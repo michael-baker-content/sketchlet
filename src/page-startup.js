@@ -25,6 +25,11 @@ export function startupError(error) {
   retry.textContent = 'try again';
   retry.onclick = () => window.location.reload();
   panel.append(message, retry);
+  if (error.code === 'account_session') {
+    const profile = document.createElement('a');
+    profile.href = '/profile'; profile.textContent = 'go to profile';
+    panel.append(profile);
+  }
   window.sketchletLoading?.finish();
   heading.focus();
 }

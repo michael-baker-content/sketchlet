@@ -1,0 +1,55 @@
+# Accounts and friend groups
+
+## Current stage: account ownership and guest linking
+
+`/profile` is a standalone, unindexed account setup preview. Clerk handles email-code and Google sign-in. The Node backend verifies a Clerk session token and idempotently creates an internal account in Neon. No email, password, or Clerk secret is sent to the public account response. Internal account IDs and owner hashes are independent of Clerk user IDs; mappings are scoped to the Clerk instance so development and production users cannot collide.
+
+Sign-in and sign-up return to `/profile`. After server verification, a persistent confirmation panel announces success and receives focus. Verification failures offer an inline retry. A guest review lists all drawings proved by this browser's guest cookie, marking same-day account conflicts as “would be hidden.” Linking requires an explicit checkbox and button. The database rechecks the reviewed list while holding transaction locks; if it changed, the user must reload the review and consent again. Review errors do not remove the signed-in confirmation, and sign-out clears the review.
+
+The header now links to the standalone `/profile` page for guests and accounts. It contains name/photo editing, personal drawings with pagination, account controls, and guest linking. Only the small name-entry dialog needed to continue rating remains on gallery pages. Signed-in API requests use the verified account owner for drawings, names, ratings, and reports. Existing guest work remains separate until linked. Drafts and profile photos stay device-local. Account release still requires the database and production-provider verification below; groups are a later release.
+
+Linking preserves drawing IDs, URLs, objects, moderation state, and received ratings. Existing account submissions win same-day conflicts, including moderated submissions. Conflicting guest drawings remain stored but are excluded by the shared public visibility view and inaccessible to their former guest identity. They carry a separate account-linking reason, also shown in the admin panel; moderation cannot restore them. The account name wins if a profile already exists, otherwise the guest name is adopted. Outgoing votes are combined (account vote wins duplicates), self-votes removed, and reports consolidated. The guest claim is permanent and repeat-safe for the same account; another account cannot claim it.
+
+Database triggers serialize identity writes with linking and reject writes using a retired guest identity. The server rotates retired guest cookies instead of treating them as account credentials. Sign-out rotates the browser's guest cookie before ending the Clerk session. A non-authenticating browser hint loads Clerk for signed-in API requests; guests do not wait for Clerk. Missing/expired account sessions fail rather than silently submitting as a guest. Visit `/profile` to reconnect or return to guest use. Drawing strokes still run entirely locally and do not contact Clerk or Neon.
+
+## Local setup
+
+1. Create a Clerk development application with email verification codes and Google enabled. Clerk Organizations is not used. The frontend loads Clerk's browser SDK and UI via script tags; no Vite or React migration is needed.
+2. Set `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in `.env.local`. The dashboard's `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `VITE_CLERK_PUBLISHABLE_KEY` labels are accepted aliases. Both keys must belong to the same instance and test/live environment. Only the publishable key and its frontend hostname are exposed by `/api/account/config`.
+3. Run `npm install @clerk/backend` to record the backend SDK and update the lockfile. The agent has not installed it or changed the dependency lockfile. Commit the resulting package changes along with the source.
+4. Run `npm run db:migrate` to apply `006_accounts.sql` and `007_guest_linking.sql`. Migration adds account/link tables, SQL functions, write guards, and the updated public visibility view. It does not itself transfer or hide any drawings. The migration reader supports dollar-quoted function bodies.
+5. Run `npm run check`, `npm run test:browser`, and `npm run build`, then restart the local server.
+6. Open `http://localhost:5173/profile` directly. Test email-code and Google sign-in, server-confirmed registration, refresh, sign-out, and sign-in again. The same Clerk user must reuse the existing internal account.
+
+For this linking update, migrate before restarting the local server, then run checks, browser tests, and build. No new dependency is needed. Test both sign-in methods, review without confirming, and then an intentional link. Confirm the home page recognizes an account's completed day, eligible drawings keep their URLs, and sign-out no longer exposes account ownership. The automated browser tests mock Clerk redirects, so the live return-flow check remains necessary.
+
+## Database verification before release
+
+Ordinary unit/browser tests do not execute PostgreSQL functions. The opt-in `tests/account-linking-db.test.mjs` integration test must pass against a disposable Neon branch before release. It creates and removes only its own randomly named schema, applies all migrations twice, checks ownership/visibility/name/vote reconciliation, stale reviews, repeated claims, retired identity writes, and a concurrent guest submission. It never reads `.env.local` or falls back to `DATABASE_URL`.
+
+In your terminal, set `SKETCHLET_TEST_DATABASE_URL` to that disposable branch's connection string, then run:
+
+```powershell
+node --test tests/account-linking-db.test.mjs
+```
+
+Remove the variable afterward with `Remove-Item Env:SKETCHLET_TEST_DATABASE_URL`. Without it, the regular test run reports this integration test as skipped. Do not treat that skip as database validation. The branch role needs permission to create schemas. These tests use fixture records and no object storage, emails, or real Clerk sessions.
+
+The application origin allowlist is shared with the existing API (`APP_ORIGIN`, localhost default, or exact Vercel deployment origins). Account registration requires an allowed Origin and accepts no browser-supplied ownership fields. Only Clerk session tokens are accepted; a guest cookie never authenticates an account. GitHub administrator authentication remains independent and grants no privileges to Clerk accounts.
+
+Automated account-handler tests use injected verification/storage, and browser tests mock Clerk scripts and requests. They do not prove live Clerk configuration or execute migrations. Never submit real credentials to test fixtures. Only the opt-in database test executes migrations. Normal guest drawing does not wait for the auth provider.
+
+## Agreed next stages
+
+1. **Verify guest linking and account ownership.** Implementation is in place; run the disposable-database test and live account checks above before release. Test account-session expiry and switching accounts on a shared browser as well.
+2. **Verify `/profile`.** The page conversion is implemented. Check direct navigation and reload, guest editing, account switching, name/photo saving, removed drawings, pagination, and name entry during rating. Group management will be added here later.
+3. **Groups and approvals.** Neon owns groups and memberships. Names are unique case-insensitively, with numeric suffix suggestions when taken. Optional description, listed/unlisted, join requests always require approval—including requests from invitation links. Members can belong to multiple groups.
+4. **Roles.** Owner can rename, manage members, grant/revoke approvers, transfer ownership, and delete the group. Approvers can accept/decline requests and toggle listed/unlisted; no delegated rename/removal powers initially. Members can leave. No group-level drawing hiding.
+5. **Visibility and gallery.** Everyone / my groups / one group filters, deduplicating drawings in the combined view. Groups show all historical drawings by current members; leaving removes that association. Nonmembers see only name, description, and join request. Only members see roster/group gallery. Unlisted groups stay out of search and public profile associations. Individual drawings remain public; unlisted does not mean private artwork.
+6. **Admin oversight.** Search all groups, rename, change listing status, manage members/roles, transfer ownership, disable groups, and audit administrative changes. Disabling never deletes drawings. Existing site-wide moderation applies in all group views.
+
+## Before production accounts
+
+Production's intended origin is `https://sketchlet.app`; see the domain transition section in [DEPLOYMENT.md](DEPLOYMENT.md). Localhost keeps its own origins and development Clerk instance. A new domain cannot read the old Vercel domain's guest cookie or device drafts, and development-account linking does not automatically transfer work to a production Clerk account.
+
+Before pushing accounts to the production branch: pass the ordinary checks, browser tests, build, and opt-in database test; verify both production sign-in methods on `sketchlet.app`; and review privacy disclosures and account deletion/retention behavior. Development sign-in success does not verify production configuration. Groups do not need to be implemented before releasing accounts. Their later release requires server-side membership checks and permission-race tests.

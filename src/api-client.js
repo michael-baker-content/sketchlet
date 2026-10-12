@@ -1,5 +1,8 @@
+import { accountHeaders } from './account-client.js';
+
 export async function api(path, data, { signal } = {}) {
-  const response = await fetch(path, { signal, credentials:'same-origin', headers:data ? {'Content-Type':'application/json'} : {}, method:data ? 'POST' : 'GET', body:data ? JSON.stringify(data) : undefined });
+  const auth = await accountHeaders();
+  const response = await fetch(path, { signal, credentials:'same-origin', headers:{...auth,...(data ? {'Content-Type':'application/json'} : {})}, method:data ? 'POST' : 'GET', body:data ? JSON.stringify(data) : undefined });
   let result;
   try { result = await response.json(); }
   catch (error) {

@@ -4,6 +4,12 @@ The `/about`, `/privacy`, and `/community` pages are editorial drafts, not final
 
 Content lives in `backend/information-pages.mjs`; the shared shell and footer live in `backend/page-shell.mjs`. These files contain fixed editorial HTML only, never visitor-supplied HTML.
 
+## Reading styles
+
+`src/styles/content.css` defines the reading layer: IBM Plex Sans for policies, procedures, form help, and moderation explanations; IBM Plex Mono for code and technical identifiers. Both load from Google Fonts with swap behavior and local fallbacks. Unkempt remains on headings, profile names, navigation, buttons, drawing controls, and short status messages. Explanatory prose uses sentence case, preserving lowercase `sketchlet`; controls and short statuses remain lowercase. A live region containing guidance uses `.reading-copy` to retain the reading font; `role="status"` alone does not determine its visual style. Capitalization is authored in the source, never applied to user text by script.
+
+Use numbered `.procedure-steps` for sequences, `<strong>` for key conditions, and `.content-notice` for important context. Notices use square lavender surfaces and classic beveled borders. `.content-notice--important` adds a quiet double-line heading divider for irreversible consequences, rather than a warning-colored stripe. Use `.terminal-output` for actionable lookup explanations: an inset dark plum panel with light IBM Plex Mono text. The empty guest-drawing result uses this treatment; loading, successful reviews, and completion messages do not retain it. Keep notices selective, preserve policy meanings, and do not turn draft language into promises or finalized terms. Shared linking notice markup lives in `src/merge-review.js` so local linking and transfers stay consistent.
+
 ## Michael's decisions before public launch of the policies
 
 1. Formspree is connected and initial local delivery was verified. Complete the inline-confirmation and production checks in [CONTACT.md](CONTACT.md). No public appeals promise is planned; restoration remains an internal capability. The report button remains the route for flagging drawings.

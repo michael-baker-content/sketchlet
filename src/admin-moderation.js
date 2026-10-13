@@ -2,7 +2,7 @@ import { reportReasons, removalReasons } from './moderation-options.js';
 
 // User-supplied names, explanations, and notes are inserted as text only.
 export function mountModeration(root, { request, onExpired, onSaved }) {
-  root.innerHTML = `<h2 id="moderation-heading">moderation</h2><div class="admin-filters"><label><span id="review-kind-label">review</span><select id="review-kind" aria-labelledby="review-kind-label"><option value="reports">reports</option><option value="drawings">submissions</option></select></label><label><span id="review-filter-label">show</span><select id="review-filter" aria-labelledby="review-filter-label"></select></label><button class="web-button" id="review-refresh">refresh list</button></div><p id="review-status" role="status"></p><div class="admin-review-list"></div><button class="web-button" id="review-more" hidden>load more</button>`;
+  root.innerHTML = `<h2 id="moderation-heading">moderation</h2><div class="admin-filters"><label><span id="review-kind-label">review</span><select id="review-kind" aria-labelledby="review-kind-label"><option value="reports">reports</option><option value="drawings">submissions</option></select></label><label><span id="review-filter-label">show</span><select id="review-filter" aria-labelledby="review-filter-label"></select></label><button class="web-button site-button utility" id="review-refresh">refresh list</button></div><p id="review-status" role="status"></p><div class="admin-review-list"></div><button class="web-button site-button utility" id="review-more" hidden>load more</button>`;
   const kind = root.querySelector('#review-kind'), filter = root.querySelector('#review-filter');
   const list = root.querySelector('.admin-review-list'), status = root.querySelector('#review-status');
   const more = root.querySelector('#review-more'), refresh = root.querySelector('#review-refresh');
@@ -37,7 +37,7 @@ export function mountModeration(root, { request, onExpired, onSaved }) {
         } else {
           const count = document.createElement('p'); count.textContent = `open reports: ${item.reports}`; card.append(count);
         }
-        const button = document.createElement('button'); button.className = 'web-button'; button.textContent = 'review drawing';
+        const button = document.createElement('button'); button.className = 'web-button site-button'; button.textContent = 'review drawing';
         button.onclick = () => review(item,button); card.append(button); list.append(card);
       }
       next = result.next; more.hidden = !next;
@@ -54,7 +54,7 @@ export function mountModeration(root, { request, onExpired, onSaved }) {
     const id = item.drawing_id || item.id;
     const dialog = document.createElement('dialog'); dialog.className = 'submission-dialog admin-review-dialog';
     dialog.setAttribute('aria-labelledby','review-dialog-heading');
-    dialog.innerHTML = `<h2 id="review-dialog-heading">review drawing</h2><p class="review-caption"></p><img class="admin-review-image" alt=""><p class="review-explanation"></p><form><label class="name-field"><span id="review-action-label">action</span><select name="action" aria-labelledby="review-action-label"><option value="hide">hide drawing</option><option value="restore">restore drawing</option><option value="clear_name">clear creator's display name</option></select></label><label class="name-field" id="reason-field"><span id="review-reason-label">removal reason (visible to creator)</span><select name="reason" aria-labelledby="review-reason-label"></select></label><label class="name-field">private note (optional)<textarea name="note" maxlength="2000" rows="3"></textarea></label><p class="muted">hiding keeps the day's submission. restoring makes it public again. clearing a name applies to all of this creator's drawings; they can choose a new name.</p><p role="status" id="review-result"></p><div class="dialog-actions"><button type="button" class="web-button" id="review-close">close</button><button type="submit" class="web-button primary">apply action</button></div></form>`;
+    dialog.innerHTML = `<h2 id="review-dialog-heading">review drawing</h2><p class="review-caption"></p><img class="admin-review-image" alt=""><p class="review-explanation"></p><form><label class="name-field"><span id="review-action-label">action</span><select name="action" aria-labelledby="review-action-label"><option value="hide">hide drawing</option><option value="restore">restore drawing</option><option value="clear_name">clear creator's display name</option></select></label><label class="name-field" id="reason-field"><span id="review-reason-label">removal reason (visible to creator)</span><select name="reason" aria-labelledby="review-reason-label"></select></label><label class="name-field">private note (optional)<textarea name="note" maxlength="2000" rows="3"></textarea></label><p class="muted">Hiding keeps the day's submission. Restoring makes it public again. Clearing a name applies to all of this creator's drawings; they can choose a new name.</p><p role="status" id="review-result"></p><div class="dialog-actions"><button type="button" class="web-button site-button utility" id="review-close">close</button><button type="submit" class="web-button site-button primary">apply action</button></div></form>`;
     dialog.querySelector('.review-caption').textContent = `${item.prompt} · ${item.date} · ${item.display_name || 'anonymous'}`;
     dialog.querySelector('.review-explanation').textContent = item.explanation || item.reason || '';
     const image = dialog.querySelector('img'); image.src = `/api/admin/drawings/${id}/image`; image.alt = item.prompt;
@@ -65,10 +65,16 @@ export function mountModeration(root, { request, onExpired, onSaved }) {
       action.querySelector('[value="restore"]').remove();
       action.querySelector('[value="clear_name"]').remove();
       action.value = 'hide';
-      dialog.querySelector('form .muted').textContent = 'this drawing is hidden because of an account-linking conflict, not a moderation decision. moderation cannot restore it.';
+      dialog.querySelector('form .muted').textContent = 'This drawing was excluded during account linking. Its merge reason is retained separately from moderation. Moderation cannot restore it.';
     }
     if (item.drawing_id && item.status === 'open') action.add(new Option('resolve this report','resolve'));
-    function sync() { dialog.querySelector('#reason-field').hidden = action.value !== 'hide'; }
+    function sync() {
+      dialog.querySelector('#reason-field').hidden = action.value !== 'hide';
+      const destructive = ['hide','clear_name'].includes(action.value);
+      const submit = form.querySelector('[type="submit"]');
+      submit.classList.toggle('danger',destructive);
+      submit.classList.toggle('primary',!destructive);
+    }
     action.onchange = sync; sync();
     let pending = false;
     dialog.querySelector('#review-close').onclick = () => dialog.close();

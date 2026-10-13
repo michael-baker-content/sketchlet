@@ -24,5 +24,5 @@ test('contact is a standalone page with a footer link and no editor or loading s
   assert.match(html, /href="\/contact" aria-current="page"/);
   assert.match(html, /action="https:\/\/formspree.io\/f\/xkjobjqb"/);
   assert.match(html, /src="\/src\/contact.js"/);
-  assert.doesNotMatch(html, /src="\/src\/loading.js"|<canvas|draft for review/);
+  assert.doesNotMatch(html, /src="\/src\/loading.js"|<canvas|draft for review/i);
 });

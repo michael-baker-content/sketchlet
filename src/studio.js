@@ -32,6 +32,13 @@ committedInk.width = committedInk.height = CANVAS_SIZE;
 const committedCtx = committedInk.getContext('2d');
 const strokeCache = createStrokeCache(committedCtx, CANVAS_SIZE, drawStroke);
 let history = new History();
+const imageStrokes = new WeakMap();
+async function prepareImageStroke(stroke) {
+  const image = new Image(); image.src = stroke.image;
+  await image.decode();
+  if (image.naturalWidth !== CANVAS_SIZE || image.naturalHeight !== CANVAS_SIZE) throw new Error('could not restore the free-draw image');
+  imageStrokes.set(stroke,image);
+}
 let tool = 'brush', color = COLORS[0].value, size = 14, brushStyle = 'brush', brushShape = 'circle';
 // Views subscribe after their controls are constructed. State changes call this
 // directly; markup and synthetic input events are never the source of truth.
@@ -100,6 +107,11 @@ document.addEventListener('scroll', () => { cursorPoint = null; eraserCursor.cla
 
 function toast(message) { $('#toast').textContent = message; $('#toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 2600); }
 function drawStroke(context, stroke) {
+  if (stroke.tool === 'image') {
+    const image = imageStrokes.get(stroke);
+    if (!image) throw new Error('the starting image is not ready');
+    context.drawImage(image,0,0,CANVAS_SIZE,CANVAS_SIZE); return;
+  }
   if (stroke.tool === 'fill') { drawFill(context, stroke); return; }
   if (stroke.shape !== undefined) { drawShapedStroke(context, stroke); return; }
   // Retain the original renderer for saved strokes without an explicit shape.
@@ -354,6 +366,27 @@ async function initialize() {
 render(); syncControls();
 const initialized = initialize();
 export function setPromptDay(day) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('Invalid draft day');
+  return setDraftScope(day);
+}
+export function setFreeDraw() { return setDraftScope('free-draw'); }
+export function hasFreeDrawing() {
+  return promptDay === 'free-draw' && (history.document.strokes.length > 0 || history.document.background !== '#FFFFFF');
+}
+export async function startFreeDrawing(imageUrl = null) {
+  if (!ready || active || promptDay !== 'free-draw') throw new Error('finish your stroke before starting a new canvas');
+  const document = createDocument();
+  if (imageUrl) {
+    const image = new Image(); image.src = imageUrl; await image.decode();
+    const source = window.document.createElement('canvas'); source.width = source.height = CANVAS_SIZE;
+    source.getContext('2d').drawImage(image,0,0,CANVAS_SIZE,CANVAS_SIZE);
+    const stroke = {tool:'image',image:source.toDataURL('image/png')};
+    await prepareImageStroke(stroke); document.strokes.push(stroke);
+  }
+  history.commit(document); changed();
+  clearTimeout(saveTimer); await persist();
+}
+function setDraftScope(day) {
   draftKey(day);
   dayQueue = dayQueue.catch(() => {}).then(async () => {
     await initialized;
@@ -366,10 +399,16 @@ export function setPromptDay(day) {
     render(); syncControls(); updateEraserCursor();
     try {
       const saved = db ? await readDraft(db, day) : null;
-      history = new History(restoreDraft(saved, day));
+      const restored = restoreDraft(saved, day);
+      if (restored.strokes[0]?.tool === 'image') {
+        try { await prepareImageStroke(restored.strokes[0]); }
+        catch { throw Object.assign(new Error('could not restore the starting image. please reload.'), {imageRestore:true}); }
+      }
+      history = new History(restored);
       setDraftStatus(!db ? 'saving unavailable' : saved?.day === day ? 'draft restored' : 'fresh canvas');
-    } catch { setDraftStatus('saving unavailable'); }
+    } catch (error) { if (error.imageRestore) throw error; setDraftStatus('saving unavailable'); }
     ready = true; $('.toolbox').inert = false; render(); syncControls();
+    syncFocusInfo();
   });
   return dayQueue;
 }
@@ -420,8 +459,9 @@ const stackedLayout = window.matchMedia('(max-width:760px), (min-width:761px) an
 const unsupportedFocusLayout = window.matchMedia('(orientation:landscape) and (max-width:1100px)');
 function syncFocusInfo() {
   const date = $('.prompt-date')?.textContent.split(' · ')[0] ?? '';
-  sharedInfo.querySelector('.focus-date-value').textContent = date;
-  sharedInfo.querySelector('.focus-prompt').textContent = `today's prompt: ${$('.daily-heading h1')?.textContent ?? ''}`;
+  const free = promptDay === 'free-draw';
+  sharedInfo.querySelector('.focus-date-value').textContent = free ? 'just for you' : date;
+  sharedInfo.querySelector('.focus-prompt').textContent = free ? 'free draw' : `today's prompt: ${$('.daily-heading h1')?.textContent ?? ''}`;
 }
 const focusInfoObserver = new MutationObserver(syncFocusInfo);
 focusInfoObserver.observe($('.intro'), { subtree: true, childList: true, characterData: true });

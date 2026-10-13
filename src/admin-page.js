@@ -19,7 +19,7 @@ function signedOut(configured, message = '') {
   document.querySelectorAll('.admin-review-dialog').forEach(dialog => { dialog.close(); dialog.remove(); });
   session = null;
   content('<div class="admin-content"><p id="admin-message" role="status"></p>' +
-    (configured ? '<form action="/api/admin/login" method="post"><button class="web-button primary" type="submit">sign in with github</button></form><p>access is limited to the site administrator.</p>' : '<p>admin sign-in is not available yet.</p>') + '</div>');
+    (configured ? '<form action="/api/admin/login" method="post"><button class="web-button site-button primary" type="submit">sign in with github</button></form><p>Access is limited to the site administrator.</p>' : '<p>Admin sign-in is not available yet.</p>') + '</div>');
   document.querySelector('#admin-message').textContent = message;
 }
 function decisionState(label, state) {
@@ -91,7 +91,7 @@ async function start() {
     signedOut(session.configured, failed ? 'sign-in was not completed. try again with the authorized github account.' : '');
     await revealPage(); return;
   }
-  content('<div class="admin-content"><div class="admin-account"><p id="admin-account-name"></p><button class="web-button" id="admin-logout">sign out</button></div><p id="admin-error" role="alert"></p><section aria-labelledby="admin-activity-heading"><h2 id="admin-activity-heading">recent activity</h2><p id="admin-activity-status" role="status"></p><ol id="admin-activity"></ol><button class="web-button" id="admin-refresh">refresh activity</button></section></div>');
+  content('<div class="admin-content"><div class="admin-account"><p id="admin-account-name"></p><button class="web-button site-button utility" id="admin-logout">sign out</button></div><p id="admin-error" role="alert"></p><section aria-labelledby="admin-activity-heading"><h2 id="admin-activity-heading">recent activity</h2><p id="admin-activity-status" role="status"></p><ol id="admin-activity"></ol><button class="web-button site-button utility" id="admin-refresh">refresh activity</button></section></div>');
   document.querySelector('#admin-account-name').textContent = `signed in as ${session.login}`;
   const moderation = document.createElement('section'); moderation.setAttribute('aria-labelledby','moderation-heading');
   document.querySelector('#admin-error').after(moderation);

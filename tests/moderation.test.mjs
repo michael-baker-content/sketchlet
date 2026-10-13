@@ -32,6 +32,23 @@ test('reports and removal decisions accept only bounded, predefined inputs', () 
   assert.equal(moderationInput({action:'restore',reason:'spam'}).reason,'');
   assert.throws(() => reviewCursor('1;delete'));
 });
+
+test('home highlights use public visibility, bounded recent dates and at least two high ratings', async () => {
+  const f = fixture(text => {
+    assert.match(text,/FROM sketchlet_public_drawings/);
+    assert.match(text,/BETWEEN \?::date-13 AND \?::date/);
+    assert.match(text,/stats.count>=2 AND stats.average>=4/);
+    assert.match(text,/LIMIT 4/);
+    return [{id,day:'2026-10-10',title:'a singing kite',owner_hash:owner,average:'4.5',count:'2',display_name:'artist'}];
+  });
+  const result = await f.request('/api/highlights');
+  assert.equal(result.status,200);
+  assert.equal(result.json[0].count,2);
+  assert.equal(result.json[0].average,4.5);
+  assert.equal(result.json[0].image,`/api/drawings/${id}/image`);
+  assert.equal(result.headers['Cache-Control'],'private, no-store');
+  assert.equal(f.uploads.length,0);
+});
 test('unavailable drawings cannot return image bytes or accept a vote or report', async () => {
   for (const [path,body] of [[`/api/drawings/${id}/image`,null],[`/api/drawings/${id}/vote`,{stars:5}],[`/api/drawings/${id}/report`,{category:'spam'}]]) {
     const f = fixture(text => {

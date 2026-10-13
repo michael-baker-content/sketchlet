@@ -30,6 +30,7 @@ const backgroundOrder = ['Paper','Cream','Pale blue','Light gray','Mint','Sky','
 export const BACKGROUND_COLORS = backgroundOrder.map(name => COLORS.find(entry => entry.name === name));
 export function createDocument() { return { background: '#FFFFFF', strokes: [] }; }
 export function draftKey(day) {
+  if (day === 'free-draw') return 'free-draw-v1';
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) throw new Error('Invalid draft day');
   return `prompt-v2:${day}`;
 }
@@ -37,7 +38,9 @@ export function restoreDraft(record, day) {
   return record?.day === day && validDocument(record.document) ? record.document : createDocument();
 }
 export function validDocument(doc) {
-  return doc && savedColors.has(doc.background) && Array.isArray(doc.strokes) && doc.strokes.every(s => s && (s.tool === 'fill'
+  return doc && savedColors.has(doc.background) && Array.isArray(doc.strokes) && doc.strokes.every((s,index) => s && (s.tool === 'image'
+    ? index === 0 && typeof s.image === 'string' && s.image.length <= 16000000 && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(s.image)
+    : s.tool === 'fill'
     ? savedColors.has(s.color) && validFillRuns(s.runs, CANVAS_SIZE)
     : (
     ['brush', 'eraser'].includes(s.tool) &&

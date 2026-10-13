@@ -38,14 +38,25 @@ html{scrollbar-gutter:auto}
 .name-field small{font-size:12px;color:#594a64}
 .profile-photo{margin-bottom:18px}
 .profile-details .profile-photo img{width:96px;height:96px;object-fit:cover;margin:8px 0 12px}
-.profile-details{border-top:3px double #827294}
+.profile-details{border-top:3px solid transparent}
+.guest-transfer{border-top:3px solid transparent}
+.merge-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.merge-options label{display:flex;flex-wrap:wrap;align-content:start;gap:6px;padding:8px;border:2px groove #eee;min-width:0;overflow-wrap:anywhere;cursor:pointer}
+.merge-options label:has(input:checked){background:#e7d9f5;outline:2px solid #644780}
+.merge-options img{display:block;width:100%;height:auto;aspect-ratio:1;object-fit:contain;background:white}
+.merge-options input[type=radio]{width:auto;flex:none}
+#guest-review-list,.transfer-list{padding:0;list-style:none}
+#guest-review-list fieldset,.transfer-list fieldset{min-width:0;margin:12px 0;padding:8px}
+#guest-review-list legend,.transfer-list legend{max-width:100%;overflow-wrap:anywhere}
+.guest-transfer input:not([type=checkbox]):not([type=radio]){display:block;box-sizing:border-box;width:100%;min-width:0;margin:8px 0;font:inherit}
 .profile-details .name-field{display:grid;gap:6px}
 .profile-details input{max-width:100%;min-width:0;font:inherit}
 .profile-drawings{margin-top:24px;padding-top:16px;border-top:2px groove #eee;min-width:0}
 .profile-drawings h3{margin:0;font-size:20px}
 .profile-drawing-list{display:grid;gap:10px}
 .profile-drawing-card{display:grid;grid-template-columns:72px minmax(0,1fr);gap:12px;align-items:center;padding:8px;border:2px outset #eee;background:#ded9e4;color:#32124f;text-decoration:none;min-width:0}
-.submission-dialog .profile-drawing-card img{width:72px;height:72px;margin:0;background:#fff;object-fit:contain}
+.profile-drawing-card img{width:72px;height:72px;max-width:100%;margin:0;background:#fff;object-fit:contain}
+.profile-drawing-card>span:only-child{grid-column:1 / -1}
 .profile-drawing-card>span{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
 .profile-drawing-card time,.profile-drawing-card small{font-size:13px}
 .profile-drawing-card:hover{background:#e7d9f5}
@@ -209,7 +220,7 @@ main,.studio-body,.canvas-column,.toolbox,.tool-section,.daily-heading>*,.submis
 .submit-actions{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:8px 12px;width:100%;max-width:520px;align-self:center}
 .save-buttons{display:flex;justify-content:center;gap:8px;max-width:100%;min-width:0}
 .save-buttons .web-button{flex:0 1 auto;min-width:0;max-width:100%;padding:8px;font-size:16px}
-.site-footer{width:100%;margin-top:16px;padding:12px 8px;background:#e7d9f5;border-block:3px double #847094;color:#493655;text-align:center;font-size:13px;line-height:1.6}
+.site-footer{width:100%;margin-top:16px;padding:12px 8px;background:#e7d9f5;border-block:3px solid transparent;color:#493655;text-align:center;font-size:13px;line-height:1.6}
 .drawing-focused .site-footer{display:none}
 .site-footer nav{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 18px;margin-bottom:4px}
 .site-footer nav a{color:inherit;text-decoration:none;padding-block:6px}
@@ -346,10 +357,10 @@ body:has(.submit-bar:not([hidden])) main { padding-bottom:0; }
 .prompt-grid .prompt-card small { display:block; margin-top:auto; overflow-wrap:anywhere; }
 .prompt-grid .prompt-card .display-date { display:block; }
 .prompt-grid > p { grid-column:1 / -1; }
-.account-notice { padding:14px 16px; border:3px double #827294; background:#eee9f2; overflow-wrap:anywhere; }
+.account-notice { padding:14px 16px; border:3px solid transparent; background:#eee9f2; overflow-wrap:anywhere; }
 .account-notice[data-state="success"] { border-color:#426442; background:#edf5e9; color:#284228; font-weight:bold; }
 .account-notice[data-state="error"] { border-color:#8a3547; }
-#guest-review { margin-block:24px; border-top:3px double #827294; padding-top:12px; }
+#guest-review { margin-block:24px; border-top:3px solid transparent; padding-top:12px; }
 #guest-review-list { padding-left:22px; overflow-wrap:anywhere; }
 #guest-review-list li { margin-block:8px; }
 @media(max-width:760px) {
@@ -382,7 +393,7 @@ body:has(.submit-bar:not([hidden])) main { padding-bottom:0; }
 .admin-review-card img { width:100%; height:auto; max-width:200px; aspect-ratio:1; object-fit:contain; }
 .submission-dialog .admin-review-image { width:100%; max-width:420px; height:auto; }
 .report-explanation,.review-explanation { white-space:pre-wrap; overflow-wrap:anywhere; }
-.admin-content section + section { margin-top:24px; border-top:3px double; padding-top:16px; }
+.admin-content section + section { margin-top:24px; border-top:3px solid transparent; padding-top:16px; }
 .name-field textarea,.name-field select { width:100%; max-width:100%; min-width:0; min-height:44px; font:inherit; font-size:16px; }
 .rating-actions { flex-wrap:wrap; }
 .rating-actions button { min-width:90px; }

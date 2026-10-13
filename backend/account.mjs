@@ -8,6 +8,24 @@ async function getStore() {
   const { neon } = await import('@neondatabase/serverless');
   const sql = neon(process.env.DATABASE_URL);
   store = {
+    async issueTransfer(guest, tokenHash) {
+      const rows = await sql`INSERT INTO sketchlet_guest_transfers(guest_hash,token_hash,expires_at)
+        SELECT ${guest},${tokenHash},now()+interval '15 minutes'
+        WHERE EXISTS (SELECT 1 FROM sketchlet_drawings WHERE owner_hash=${guest})
+        AND NOT EXISTS (SELECT 1 FROM sketchlet_guest_links WHERE guest_hash=${guest})
+        ON CONFLICT(guest_hash) DO UPDATE SET token_hash=EXCLUDED.token_hash,expires_at=EXCLUDED.expires_at,account_id=NULL,result=NULL
+        RETURNING guest_hash`;
+      return rows.length > 0;
+    },
+    async transferPreview(accountId, tokenHash) {
+      const [transfer] = await sql`SELECT guest_hash FROM sketchlet_guest_transfers
+        WHERE token_hash=${tokenHash} AND expires_at>now() AND account_id IS NULL`;
+      return transfer ? this.preview(accountId,transfer.guest_hash) : {error:'expired'};
+    },
+    async redeemTransfer(accountId, tokenHash, revision, choices) {
+      const [row] = await sql`SELECT sketchlet_redeem_transfer(${accountId},${tokenHash},${revision},${JSON.stringify(choices)}::jsonb) AS result`;
+      return row.result;
+    },
     async preview(accountId, guest) {
       const [claim] = await sql`SELECT account_id FROM sketchlet_guest_links WHERE guest_hash=${guest}`;
       if (claim) return {drawings:[],claimed:true};
@@ -15,8 +33,8 @@ async function getStore() {
         FROM (SELECT sketchlet_guest_plan(${accountId},${guest}) AS plan) p`;
       return row;
     },
-    async link(accountId, guest, revision) {
-      const [row] = await sql`SELECT sketchlet_link_guest(${accountId},${guest},${revision}) AS result`;
+    async link(accountId, guest, revision, choices) {
+      const [row] = await sql`SELECT sketchlet_link_guest(${accountId},${guest},${revision},${JSON.stringify(choices)}::jsonb) AS result`;
       return row.result;
     },
     async retired(guest) {

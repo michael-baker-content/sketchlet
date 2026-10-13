@@ -19,7 +19,8 @@ let state = today || { date: easternDate(), prompt: promptForDate(easternDate())
 const connected = !!today;
 let queue = [], queueIndex = 0, viewGeneration = 0;
 let viewController = null;
-function beginView() { viewController?.abort(); viewController = new AbortController(); return ++viewGeneration; }
+let disposeHighlights = () => {};
+function beginView() { disposeHighlights(); disposeHighlights = () => {}; viewController?.abort(); viewController = new AbortController(); return ++viewGeneration; }
 function viewApi(path) { return api(path, undefined, { signal: viewController.signal }); }
 window.addEventListener('pagehide', () => { beginView(); });
 // A restored document may contain a canceled loading view or yesterday's status.
@@ -54,7 +55,7 @@ mountProfilePhoto();
 const nameDialog = document.createElement('dialog');
 nameDialog.className = 'submission-dialog';
 nameDialog.setAttribute('aria-labelledby','name-heading');
-nameDialog.innerHTML = '<form><h2 id="name-heading">add a name to rate</h2><label class="name-field">name<input id="profile-name" required maxlength="32" autocomplete="nickname"></label><p>your name also appears on your drawings.</p><p id="name-error" role="alert"></p><div class="dialog-actions"><button class="web-button" type="button" id="cancel-name">cancel</button><button class="web-button" id="save-name">save name</button></div></form>';
+nameDialog.innerHTML = '<form><h2 id="name-heading">add a name to rate</h2><label class="name-field">name<input id="profile-name" required maxlength="32" autocomplete="nickname"></label><p>your name also appears on your drawings.</p><p id="name-error" role="alert"></p><div class="dialog-actions"><button class="web-button site-button utility" type="button" id="cancel-name">cancel</button><button class="web-button site-button primary" id="save-name">save name</button></div></form>';
 document.body.append(nameDialog);
 let savingName = false;
 function openProfile() {
@@ -98,6 +99,7 @@ async function adoptDay(next) {
 }
 header();
 function show(content) {
+  disposeHighlights(); disposeHighlights = () => {};
   if (intro) intro.hidden = true;
   hideEditor(); panel.hidden = false; panel.innerHTML = content;
   const heading = panel.querySelector('#page-heading');
@@ -107,10 +109,10 @@ function show(content) {
     heading.focus();
   }
 }
-function title(text, back = location.pathname.replace(/\/$/,'') === '/gallery' ? 'gallery' : 'home') { return `<div class="panel-title"><h1 id="page-heading">${escape(text)}</h1><button class="web-button" id="back-home" data-return="${back}">${back === 'gallery' ? 'back to gallery' : 'back to today'}</button></div>`; }
+function title(text, back = location.pathname.replace(/\/$/,'') === '/gallery' ? 'gallery' : 'home') { return `<div class="panel-title"><h1 id="page-heading">${escape(text)}</h1><button class="web-button site-button utility" id="back-home" data-return="${back}">${back === 'gallery' ? 'back to gallery' : 'back to today'}</button></div>`; }
 function wireHome() { const button=$('#back-home'); button.onclick=button.dataset.return==='gallery'?()=>{openArchive();}:home; }
 function errorScreen(error) {
-  show(title('could not load')+`<div class="empty-state"><p>${escape(error.message)}</p><button class="web-button" id="retry-page">try again</button></div>`);
+  show(title('could not load')+`<div class="empty-state"><p>${escape(error.message)}</p><button class="web-button site-button utility" id="retry-page">try again</button></div>`);
   $('#retry-page').onclick = () => window.location.reload();
   wireHome();
 }
@@ -140,7 +142,7 @@ function route(path) {
 function home() { window.location.assign('/'); }
 function addReportButton(drawing, container) {
   if (drawing.mine || drawing.removed) return;
-  const button = document.createElement('button'); button.className = 'web-button'; button.type = 'button'; button.textContent = 'report drawing';
+  const button = document.createElement('button'); button.className = 'web-button site-button'; button.type = 'button'; button.textContent = 'report drawing';
   button.onclick = async () => {
     button.disabled = true;
     try { const { openReport } = await import('./report-dialog.js'); if (button.isConnected) openReport(drawing,button); }
@@ -154,8 +156,17 @@ function showDrawing(drawing) {
     show(title('your drawing') + `<div class="empty-state"><p>your drawing for “${escape(drawing.prompt)}” is not public.</p><p>${escape(drawing.reason)}</p><p>it still counts as your submission for ${escape(formatPromptDate(drawing.date))}. a replacement cannot be submitted.</p></div>`);
     wireHome(); return;
   }
-  show(title(drawing.mine?'your drawing':drawing.prompt)+`<div class="submission-layout"><img class="finished-drawing" alt="${escape(drawing.prompt)}"><div class="submission-info"><h2>${escape(drawing.prompt)}</h2><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time></p><p class="rating-total">${escape(ratingText(drawing))}</p>${drawing.mine && today?`<div class="streak-box"><strong>${counted(state.streak, 'day')}</strong><span>drawing streak</span></div>`:''}<div class="drawing-actions"><button class="web-button" id="copy-drawing-link" type="button">copy link</button><button class="web-button" id="share-drawing-card" type="button">share card</button><button class="web-button" id="start-rating">rate drawings</button></div><p class="muted share-status" id="share-status" role="status"></p>${!drawing.mine && drawing.myVote?`<p>your rating: ${drawing.myVote} / 5</p>`:''}</div></div>`);
+  show(title(drawing.mine?'your drawing':drawing.prompt)+`<div class="submission-layout"><img class="finished-drawing" alt="${escape(drawing.prompt)}"><div class="submission-info"><h2>${escape(drawing.prompt)}</h2><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time></p><p class="rating-total">${escape(ratingText(drawing))}</p>${drawing.mine && today?`<div class="streak-box"><strong>${counted(state.streak, 'day')}</strong><span>drawing streak</span></div>`:''}<div class="drawing-actions"><button class="web-button site-button" id="copy-drawing-link" type="button">copy link</button><button class="web-button site-button" id="share-drawing-card" type="button">share card</button><button class="web-button site-button" id="start-rating">rate drawings</button></div><p class="muted share-status" id="share-status" role="status"></p>${!drawing.mine && drawing.myVote?`<p>your rating: ${drawing.myVote} / 5</p>`:''}</div></div>`);
   panel.querySelector('img').src=drawing.image;
+  if (drawing.mine) {
+    const freeDraw = document.createElement('a'); freeDraw.className = 'web-button site-button';
+    freeDraw.href = '/free-draw?start=blank'; freeDraw.textContent = 'free draw: blank canvas';
+    panel.querySelector('.drawing-actions').append(freeDraw);
+    const continueDrawing = document.createElement('a'); continueDrawing.className = 'web-button site-button';
+    continueDrawing.href = '/free-draw?drawing=' + encodeURIComponent(drawing.id);
+    continueDrawing.textContent = 'free draw from this drawing';
+    panel.querySelector('.drawing-actions').append(continueDrawing);
+  }
   addReportButton(drawing,panel.querySelector('.drawing-actions'));
   panel.querySelector('.submission-info h2').insertAdjacentHTML('afterend', authorMarkup(drawing));
   const copyButton = $('#copy-drawing-link'), shareStatus = $('#share-status');
@@ -220,19 +231,19 @@ async function startRating(drawingId = null){
 function renderRating(){
   const drawing=queue[queueIndex];
   if(!drawing){
-    show(title('rating break','home')+`<div class="empty-state"><p>you’ve reached the end of this batch.</p><button class="web-button" id="more-ratings">check for more drawings</button>${ratingSkips.ids().length?'<button class="web-button" id="review-skipped">include skipped drawings</button>':''}</div>`);
+    show(title('rating break','home')+`<div class="empty-state"><p>you’ve reached the end of this batch.</p><button class="web-button site-button utility" id="more-ratings">check for more drawings</button>${ratingSkips.ids().length?'<button class="web-button site-button utility" id="review-skipped">include skipped drawings</button>':''}</div>`);
     const navigation = document.createElement('div');
     navigation.className = 'panel-navigation';
     const backToday = $('#back-home');
     backToday.before(navigation);
     const backGallery = document.createElement('button');
-    backGallery.className = 'web-button';backGallery.textContent = 'back to gallery';
+    backGallery.className = 'web-button site-button utility';backGallery.textContent = 'back to gallery';
     backGallery.onclick = () => { route('/gallery');openArchive(); };
     navigation.append(backGallery, backToday);
     wireHome();$('#more-ratings').onclick=()=>startRating();
     if($('#review-skipped'))$('#review-skipped').onclick=()=>{ratingSkips.clear();startRating();};return;
   }
-  show(title('rate a drawing')+`<div class="rating-layout"><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time> · ${escape(drawing.prompt)}</p><img class="rating-drawing" alt="${escape(drawing.prompt)}"><fieldset class="star-picker"><legend>your rating</legend>${[1,2,3,4,5].map(n=>`<label><input type="radio" name="stars" value="${n}" aria-label="${counted(n, 'star')}"><span aria-hidden="true">☆</span></label>`).join('')}</fieldset><p id="rating-status" class="muted" role="status">choose 1–5 stars</p><div class="rating-actions"><button class="web-button" id="skip-rating">skip</button><button class="web-button primary" id="save-rating" disabled>save rating</button></div></div>`);
+  show(title('rate a drawing')+`<div class="rating-layout"><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time> · ${escape(drawing.prompt)}</p><img class="rating-drawing" alt="${escape(drawing.prompt)}"><fieldset class="star-picker"><legend>your rating</legend>${[1,2,3,4,5].map(n=>`<label><input type="radio" name="stars" value="${n}" aria-label="${counted(n, 'star')}"><span aria-hidden="true">☆</span></label>`).join('')}</fieldset><p id="rating-status" class="muted" role="status">choose 1–5 stars</p><div class="rating-actions"><button class="web-button site-button utility" id="skip-rating">skip</button><button class="web-button site-button primary" id="save-rating" disabled>save rating</button></div></div>`);
   wireHome();let selected=drawing.myVote || 0, imageReady=false, votePending=false;
   addReportButton(drawing,panel.querySelector('.rating-actions'));
   const ratingImage=panel.querySelector('.rating-drawing');
@@ -267,7 +278,7 @@ async function openArchive(){
   showLoading('gallery');
   try{
     const days=await viewApi('/api/archive');if(generation!==viewGeneration)return;
-    show(title('gallery','home')+`<div class="gallery-actions"><button class="web-button primary" id="gallery-rate">rate drawings</button></div><div class="archive-grid prompt-grid">${days.length?days.map(day=>`<button class="archive-card prompt-card" data-date="${escape(day.date)}"><img src="${escape(day.image)}" alt="drawing for ${escape(day.prompt)}" loading="lazy" decoding="async"><span>${escape(day.prompt)}</span><small><time class="display-date">${escape(formatPromptDate(day.date))}</time>${counted(day.count, 'drawing')}</small></button>`).join(''):'<p>no drawings yet. yours could be the first.</p>'}</div>`);wireHome();
+    show(title('gallery','home')+`<div class="gallery-actions"><button class="web-button site-button primary" id="gallery-rate">rate drawings</button></div><div class="archive-grid prompt-grid">${days.length?days.map(day=>`<button class="archive-card prompt-card" data-date="${escape(day.date)}"><img src="${escape(day.image)}" alt="drawing for ${escape(day.prompt)}" loading="lazy" decoding="async"><span>${escape(day.prompt)}</span><small><time class="display-date">${escape(formatPromptDate(day.date))}</time>${counted(day.count, 'drawing')}</small></button>`).join(''):'<p>no drawings yet. yours could be the first.</p>'}</div>`);wireHome();
     $('#gallery-rate').onclick=()=>startRating();
     panel.querySelectorAll('[data-date]').forEach(button=>button.onclick=()=>gallery(button.dataset.date));
   }catch(error){if(generation===viewGeneration)errorScreen(error);}
@@ -277,6 +288,36 @@ $('#open-archive').onclick=event=>{
   event.preventDefault();route('/gallery');openArchive();
 };
 
+async function personalGallery() {
+  route('/gallery?view=mine');
+  const generation = beginView();
+  show(title('your gallery') + '<div class="information-copy"><p>Your drawings, newest first. <a href="/profile">Back to your profile</a>.</p></div><div class="archive-grid personal-gallery"></div><div class="gallery-actions"><button class="web-button site-button utility" id="personal-gallery-more" hidden>load more</button><p role="status" id="personal-gallery-status"></p></div>');
+  wireHome();
+  const list = $('.personal-gallery'), more = $('#personal-gallery-more'), status = $('#personal-gallery-status');
+  let next = null, busy = false;
+  async function loadMore() {
+    if (busy) return;
+    busy = true; more.disabled = true; status.textContent = 'loading your drawings…';
+    try {
+      const result = await viewApi('/api/profile/drawings' + (next ? '?before=' + encodeURIComponent(next) : ''));
+      if (generation !== viewGeneration) return;
+      for (const drawing of result.drawings) {
+        const card = document.createElement(drawing.removed ? 'article' : 'a');
+        card.className = 'archive-card';
+        if (!drawing.removed) card.href = drawing.url;
+        card.innerHTML = `${drawing.removed ? '' : `<img src="${escape(drawing.image)}" alt="${escape(drawing.prompt)}" loading="lazy" decoding="async">`}<span>${escape(drawing.prompt)}</span><small><time>${escape(formatPromptDate(drawing.date))}</time>${drawing.removed ? `<br>${escape(drawing.reason)}` : ''}</small>`;
+        list.append(card);
+      }
+      next = result.next; more.hidden = !next; more.textContent = 'load more';
+      status.textContent = list.children.length ? '' : 'no drawings yet. save your first drawing to the gallery to see it here.';
+    } catch (error) {
+      if (generation !== viewGeneration) return;
+      status.textContent = error.message; more.hidden = false; more.textContent = 'try again';
+    } finally { busy = false; more.disabled = false; }
+  }
+  more.onclick = loadMore;
+  await loadMore();
+}
 async function gallery(day){
   route(`/gallery?date=${encodeURIComponent(day)}`);
   const generation=beginView();
@@ -299,7 +340,16 @@ async function load() {
     if (state.submission) { showDrawing(state.submission); return; }
     if (!editor) {
       if (!loadEditor) throw new Error('drawing tools are unavailable. please reload.');
-      show(`<div class="panel-title"><h1 id="page-heading">today's drawing</h1></div><div class="drawing-welcome"><p class="display-date">${escape(formatPromptDate(state.date))}</p><h2>today's prompt: "${escape(state.prompt)}"</h2><p>draw your interpretation. a quick doodle is welcome.</p><ul><li>your draft saves on this device.</li><li>one drawing per day — final once saved to the gallery.</li><li>a new prompt arrives at midnight eastern.</li></ul>${storageUnavailable ? '<p role="status">local draft storage is unavailable. your drawing may not survive a reload.</p>' : ''}<button class="web-button primary" id="begin-drawing">begin drawing</button><p id="begin-status" role="status"></p></div>`);
+      show(`<div class="panel-title"><h1 id="page-heading">today's drawing</h1></div><div class="drawing-welcome"><p class="display-date">${escape(formatPromptDate(state.date))}</p><h2>today's prompt: "${escape(state.prompt)}"</h2><p>draw your interpretation. a quick doodle is welcome.</p><ul><li>your draft saves on this device.</li><li>one drawing per day — final once saved to the gallery.</li><li>a new prompt arrives at midnight eastern.</li></ul>${storageUnavailable ? '<p role="status">local draft storage is unavailable. your drawing may not survive a reload.</p>' : ''}<button class="web-button site-button primary" id="begin-drawing">begin drawing</button><p id="begin-status" role="status"></p></div>`);
+      const columns = document.createElement('div'); columns.className = 'welcome-columns';
+      const dayPanel = document.createElement('section'); dayPanel.className = 'welcome-day'; dayPanel.setAttribute('aria-labelledby','page-heading');
+      dayPanel.append(...panel.childNodes);
+      const highlights = document.createElement('section'); highlights.className = 'home-highlights'; highlights.setAttribute('aria-labelledby','highlights-heading');
+      highlights.innerHTML = '<div class="panel-title"><h2 id="highlights-heading">recent favorites</h2></div><p class="highlights-description reading-copy">From the past 14 days: four stars or higher, with at least two ratings.</p><div class="highlights-grid"></div><p class="highlights-status" role="status">loading recent favorites…</p><button class="web-button site-button utility" hidden>try again</button>';
+      columns.append(dayPanel,highlights); panel.append(columns);
+      import('./home-highlights.js').then(({mountHomeHighlights}) => {
+        if (generation === viewGeneration && highlights.isConnected) disposeHighlights = mountHomeHighlights(highlights,api);
+      }).catch(() => { if (highlights.isConnected) highlights.querySelector('[role=status]').textContent = 'recent favorites are unavailable.'; });
       $('#begin-drawing').onclick = async () => {
         const button = $('#begin-drawing'); button.disabled = true; button.textContent = 'opening…';
         try {
@@ -327,6 +377,7 @@ async function load() {
   try {
     if (location.pathname.startsWith('/d/') && !id) throw new Error('drawing not found');
     if (params.get('view') === 'rate') { await startRating(params.get('drawing')); return; }
+    if (params.get('view') === 'mine') { await personalGallery(); return; }
     if (id) {
       const drawing = await viewApi('/api/drawings/' + id);
       if (generation === viewGeneration) showDrawing(drawing);

@@ -17,7 +17,7 @@ test('Clerk config accepts dashboard variable aliases and exposes no secret in p
   assert.equal(result.body.includes('sk_test_fixture'),false);
 });
 
-async function request(path, { method='GET', origin='https://sketchlet.example', body={}, authenticated=true, cookie='', rows=[], linkResult={linked:1,hidden:0} } = {}) {
+async function request(path, { method='GET', origin='https://sketchlet.example', body={}, authenticated=true, cookie='', rows=[], linkResult={linked:1,hidden:0}, retired=false } = {}) {
   const result = { registrations:[], reads:[], previews:[], links:[], headers:{} };
   const handler = createAccountHandler({ getConfig:() => config,
     verify:async () => { if (!authenticated) throw Object.assign(new Error('please sign in again'),{status:401}); return 'user_verified'; },
@@ -26,6 +26,10 @@ async function request(path, { method='GET', origin='https://sketchlet.example',
       register:async (...args) => { result.registrations.push(args); return {id:'internal'}; },
       preview:async (...args) => { result.previews.push(args); return {drawings:rows,revision:'a'.repeat(32)}; },
       link:async (...args) => { result.links.push(args); return linkResult; },
+      retired:async () => retired,
+      issueTransfer:async (...args) => { result.links.push(args); return true; },
+      transferPreview:async (...args) => { result.previews.push(args); return {drawings:rows,revision:'a'.repeat(32)}; },
+      redeemTransfer:async (...args) => { result.links.push(args); return linkResult; },
     }),
   });
   await handler({ method, headers:{origin,cookie,'content-type':'application/json'}, body }, {
@@ -84,19 +88,56 @@ test('link confirmation requires session, origin, guest proof and a reviewed rev
   const options = {method:'POST',cookie:'sketchlet_guest='+'a'.repeat(64),body:{revision:'b'.repeat(32)}};
   const good = await request('/api/account/link-guest',options);
   assert.equal(good.status,200);
-  assert.deepEqual(good.links,[['internal',guestOwner({headers:{cookie:options.cookie}}),'b'.repeat(32)]]);
+  assert.deepEqual(good.links,[['internal',guestOwner({headers:{cookie:options.cookie}}),'b'.repeat(32),{}]]);
   for (const change of [{authenticated:false},{origin:'https://wrong.example'},{cookie:''},{body:{}},{body:{...options.body,owner:'forged'}}]) {
     const denied = await request('/api/account/link-guest',{...options,...change});
     assert.ok(denied.status>=400);
     assert.deepEqual(denied.links,[]);
   }
-  for (const error of ['changed','claimed']) {
+  for (const error of ['changed','claimed','choices']) {
     assert.equal((await request('/api/account/link-guest',{...options,linkResult:{error}})).status,409);
   }
   const signedOut = await request('/api/account/sign-out',{method:'POST',cookie:options.cookie});
   assert.equal(signedOut.status,200);
-  assert.notEqual(guestOwner({headers:{cookie:signedOut.headers['Set-Cookie']}}),guestOwner({headers:{cookie:options.cookie}}));
+  assert.equal(signedOut.headers['Set-Cookie'],undefined);
+  const retired = await request('/api/account/sign-out',{method:'POST',cookie:options.cookie,retired:true});
+  assert.notEqual(guestOwner({headers:{cookie:retired.headers['Set-Cookie']}}),guestOwner({headers:{cookie:options.cookie}}));
   assert.deepEqual(signedOut.links,[]);
+});
+
+test('merge choices are validated and passed intact to the transaction', async () => {
+  const id = '11111111-1111-4111-8111-111111111111', other = '22222222-2222-4222-8222-222222222222';
+  for (const path of ['/api/account/link-guest','/api/account/transfer-confirm']) {
+    const body = {revision:'a'.repeat(32),choices:{[id]:other},...(path.endsWith('transfer-confirm') ? {code:'b'.repeat(64)} : {})};
+    const options = {method:'POST',cookie:'sketchlet_guest='+'c'.repeat(64),body};
+    const result = await request(path,options);
+    assert.equal(result.status,200);
+    assert.deepEqual(result.links[0].at(-1),body.choices);
+    for (const choices of [null,[],true,{bad:other},{[id]:12}]) {
+      const denied = await request(path,{...options,body:{...body,choices}});
+      assert.equal(denied.status,400); assert.deepEqual(denied.links,[]);
+    }
+  }
+});
+
+test('transfer issuance proves guest possession without Clerk and redemption requires account consent', async () => {
+  const cookie = 'sketchlet_guest='+'a'.repeat(64);
+  const issued = await request('/api/account/transfer-code',{method:'POST',origin:'https://sketchlet-blush.vercel.app',cookie,authenticated:false});
+  assert.equal(issued.status,200);
+  assert.match(issued.json.code,/^[a-f0-9]{64}$/);
+  assert.notEqual(issued.links[0][1],issued.json.code);
+  for (const changes of [{cookie:''},{origin:'https://evil.example'},{body:{guest:'fake'}}]) {
+    const denied = await request('/api/account/transfer-code',{method:'POST',cookie,...changes});
+    assert.ok(denied.status>=400); assert.equal(denied.links.length,0);
+  }
+  const body = {code:issued.json.code,revision:'b'.repeat(32)};
+  assert.equal((await request('/api/account/transfer-preview',{method:'POST',body:{code:body.code}})).status,200);
+  assert.equal((await request('/api/account/transfer-confirm',{method:'POST',body})).status,200);
+  for (const changes of [{authenticated:false},{origin:'https://evil.example'},{body:{code:body.code}},{body:{...body,owner:'fake'}}]) {
+    const denied = await request('/api/account/transfer-confirm',{method:'POST',body,...changes});
+    assert.ok(denied.status>=400); assert.equal(denied.links.length,0);
+  }
+  assert.equal((await request('/api/account/transfer-confirm',{method:'POST',body,linkResult:{error:'expired'}})).status,409);
 });
 
 test('shared guest identity preserves existing cookies and securely issues missing ones', () => {

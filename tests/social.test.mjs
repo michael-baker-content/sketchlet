@@ -14,6 +14,16 @@ test('custom domain metadata uses sketchlet.app without changing local developme
   assert.equal(publicOrigin({VERCEL:'1',VERCEL_PROJECT_PRODUCTION_URL:'legacy.vercel.app',APP_ORIGIN:'https://sketchlet.app'}),'https://sketchlet.app');
 });
 
+test('free draw serves its own shell without drawing queries', async () => {
+  const result = await response('/free-draw', {
+    drawing:() => assert.fail('no drawing query'), prompt:() => assert.fail('no prompt query'),
+  });
+  assert.equal(result.status,200);
+  assert.match(result.body,/src\/free-draw-page.js/);
+  assert.match(result.body,/free draw — sketchlet/);
+  assert.doesNotMatch(result.body,/src\/home-page.js|src\/gallery-page.js/);
+});
+
 test('account preview serves a private shell without loading guest or drawing data', async () => {
   const result = await response('/profile', {
     drawing:() => assert.fail('no drawing query'), prompt:() => assert.fail('no prompt query'),
@@ -32,7 +42,7 @@ test('information drafts are readable without JavaScript, cookies, or database a
       });
       assert.equal(result.status, 200);
       assert.equal(result.headers['X-Robots-Tag'], 'noindex, nofollow');
-      assert.match(result.body, /draft for review/);
+      assert.match(result.body, /Draft for review/);
       assert.match(result.body, /<h2>/);
       assert.match(result.body, new RegExp(`href="/${slug}" aria-current="page"`));
       assert.doesNotMatch(result.body, /<script|<canvas|please enable javascript|class="empty-state"/);

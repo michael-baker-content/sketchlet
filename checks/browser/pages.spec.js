@@ -49,6 +49,7 @@ async function fixture(page, overrides = {}, { emptyDraft = false } = {}) {
     const data = {
       '/api/today': today,
       '/api/archive': [{ date: drawing.date, prompt: drawing.prompt, count: 1, image: drawing.image }],
+      '/api/highlights': [],
       '/api/gallery': [drawing],
       ['/api/drawings/' + id]: drawing,
       '/api/profile': { displayName: 'tester' },
@@ -69,11 +70,104 @@ async function fixture(page, overrides = {}, { emptyDraft = false } = {}) {
   return { requests, errors };
 }
 
+test('free draw saves separately and restores without API requests', async ({page}) => {
+  const {requests,errors} = await fixture(page);
+  await page.goto('/free-draw');
+  const canvas = page.locator('#canvas');
+  await expect(canvas).toBeVisible();
+  await expect(page.locator('#download')).toBeEnabled();
+  await expect(page.locator('#review-drawing')).toHaveCount(0);
+  await canvas.scrollIntoViewIfNeeded();
+  const box = await canvas.boundingBox();
+  await page.mouse.move(box.x + box.width * .3, box.y + box.height * .3);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * .6, box.y + box.height * .5, {steps:5});
+  await page.mouse.up();
+  const drafts = () => page.evaluate(async () => {
+    const {openDraftDatabase,readDraft} = await import('/src/draft-storage.js');
+    const db = await openDraftDatabase();
+    return {free:await readDraft(db,'free-draw'),daily:await readDraft(db,'2026-10-06')};
+  });
+  await expect.poll(async () => (await drafts()).free?.document.strokes.length).toBe(1);
+  const before = await drafts();
+  expect(before.daily.document.strokes).toHaveLength(1);
+  await page.reload();
+  await expect(canvas).toBeVisible();
+  expect(await drafts()).toEqual(before);
+  expect(requests.filter(path => path.startsWith('/api/'))).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test('a submitted image can seed free draw and survives clear, undo, and reload', async ({page}) => {
+  const {errors} = await fixture(page);
+  await page.goto('/free-draw?drawing=' + id);
+  await expect(page.locator('.site-footer a[href="/free-draw"]')).toHaveCount(0);
+  await page.locator('#free-start').click();
+  await expect(page).toHaveURL('http://sketchlet.test/free-draw');
+  const readFree = () => page.evaluate(async () => {
+    const {openDraftDatabase,readDraft} = await import('/src/draft-storage.js');
+    return readDraft(await openDraftDatabase(),'free-draw');
+  });
+  await expect.poll(async () => (await readFree())?.document.strokes[0]?.tool).toBe('image');
+  const original = await readFree();
+  await page.locator('#clear').click();
+  await expect.poll(async () => (await readFree()).document.strokes.length).toBe(0);
+  await page.locator('#undo').click();
+  await expect.poll(async () => (await readFree()).document.strokes.length).toBe(1);
+  await page.reload();
+  await expect(page.locator('#canvas')).toBeVisible();
+  expect(await readFree()).toEqual(original);
+  await page.goto('/free-draw?start=blank');
+  await expect(page.locator('#free-start-copy')).toContainText('replaces your saved free-draw canvas');
+  await page.locator('#free-keep').click();
+  expect(await readFree()).toEqual(original);
+  expect(errors).toEqual([]);
+});
+
 function expectNoEditor(requests) {
   expect(requests).not.toContain('/src/studio.js');
   expect(requests).not.toContain('/src/editor.html');
   expect(requests).not.toContain('/src/submission.js');
 }
+
+test('guest transfer survives unavailable sign-in and requires review and explicit consent', async ({ page }) => {
+  const code = 'a'.repeat(64);
+  let confirmations = 0;
+  await fixture(page, {
+    '/api/account/config': route => route.fulfill({status:503,json:{error:'sign-in unavailable'}}),
+    '/api/account/transfer-code': route => route.fulfill({json:{code}}),
+  });
+  await page.goto('/profile');
+  await expect(page.locator('#account-status')).toContainText('you can still create a guest transfer code');
+  await expect(page.locator('#profile-recovery-heading')).toBeVisible();
+  await page.getByRole('button',{name:'create transfer code',exact:true}).click();
+  await expect(page.locator('.transfer-output input')).toHaveValue(code);
+  await page.evaluate(async ({ code }) => {
+    const { mountGuestTransfer } = await import('/src/guest-transfer.js');
+    window.transferCalls = [];
+    mountGuestTransfer(document.querySelector('.guest-transfer'),async (path,body) => {
+      window.transferCalls.push({path,body});
+      if (path.endsWith('transfer-preview')) return {drawings:[{id:'11111111-1111-4111-8111-111111111111',existingId:'22222222-2222-4222-8222-222222222222',date:'2026-10-10',prompt:'a singing kite',conflict:true}],revision:'b'.repeat(32)};
+      return {linked:0,hidden:1};
+    });
+  },{code});
+  await page.locator('.transfer-review input').fill(code);
+  await page.getByRole('button',{name:'review drawings',exact:true}).click();
+  await expect(page.locator('.transfer-list')).toContainText('choose one to keep');
+  await page.getByRole('button',{name:'confirm transfer',exact:true}).click();
+  confirmations = await page.evaluate(() => window.transferCalls.filter(call=>call.path.endsWith('transfer-confirm')).length);
+  expect(confirmations).toBe(0);
+  await page.locator('.transfer-confirm input[type=checkbox]').check();
+  await page.getByRole('button',{name:'confirm transfer',exact:true}).click();
+  await expect(page.locator('.transfer-status')).toContainText('choose a drawing');
+  await page.getByRole('radio',{name:'account drawing',exact:false}).check();
+  await expect(page.locator('.transfer-confirm input[type=checkbox]')).not.toBeChecked();
+  await page.locator('.transfer-confirm input[type=checkbox]').check();
+  await page.getByRole('button',{name:'confirm transfer',exact:true}).click();
+  await expect(page.locator('.transfer-status')).toContainText('0 drawings linked; 1 drawing hidden');
+  expect(await page.evaluate(() => window.transferCalls.at(-1).body)).toEqual({code,revision:'b'.repeat(32),choices:{'11111111-1111-4111-8111-111111111111':'22222222-2222-4222-8222-222222222222'}});
+  await expect(page.locator('.transfer-confirm')).toBeHidden();
+});
 
 test('account preview verifies sign-in on the server and signs out without loading drawings', async ({ page }) => {
   let registrations = 0;
@@ -103,7 +197,7 @@ test('account preview verifies sign-in on the server and signs out without loadi
   await expect(page.locator('#account-status')).toContainText('your account is connected');
   await expect(page.locator('#account-status')).toHaveAttribute('data-state','success');
   await expect(page.locator('#guest-review-list')).toContainText('a singing kite — would be linked');
-  await expect(page.locator('#guest-review-list')).toContainText('two dancing snails — would be hidden');
+  await expect(page.locator('#guest-review-list')).toContainText('two dancing snails — choose one to keep');
   expect(await page.evaluate(() => window.fixtureClerkOptions.signInForceRedirectUrl)).toBe('http://sketchlet.test/profile');
   expect(await page.evaluate(() => window.fixtureClerkOptions.signUpForceRedirectUrl)).toBe('http://sketchlet.test/profile');
   expect(registrations).toBe(1);
@@ -169,6 +263,62 @@ test('account preview handles missing Clerk setup without touching the gallery',
   expectNoEditor(requests);
 });
 
+test('profile loader waits for both profile details and drawing history', async ({page}) => {
+  let releaseName, releaseDrawings;
+  const nameGate = new Promise(resolve => { releaseName = resolve; });
+  const drawingsGate = new Promise(resolve => { releaseDrawings = resolve; });
+  await fixture(page, {
+    '/api/profile': async route => { await nameGate; await route.fulfill({json:{displayName:'ready artist'}}); },
+    '/api/profile/drawings': async route => { await drawingsGate; await route.fulfill({json:{drawings:[drawing],next:null}}); },
+  });
+  await page.goto('/profile');
+  await expect(page.locator('#page-loader')).toBeVisible();
+  await expect(page.locator('#profile-edit-form')).toBeHidden();
+  releaseName();
+  await expect(page.locator('#profile-name')).toHaveValue('ready artist');
+  await expect(page.locator('#page-loader')).toBeVisible();
+  releaseDrawings();
+  await expect(page.locator('#page-loader')).toBeHidden();
+  await expect(page.locator('#profile-edit-form')).toBeVisible();
+  await expect(page.locator('.profile-drawing-list')).toContainText(drawing.prompt);
+  await expect(page.locator('#profile-recovery-heading')).toBeVisible();
+});
+
+test('profile loading failures reveal usable retry controls', async ({page}) => {
+  await fixture(page, {
+    '/api/profile': route => route.fulfill({status:503,json:{error:'profile unavailable'}}),
+    '/api/profile/drawings': route => route.fulfill({status:503,json:{error:'drawings unavailable'}}),
+  });
+  await page.goto('/profile');
+  await expect(page.locator('#page-loader')).toBeHidden();
+  await expect(page.locator('#profile-load-retry')).toBeVisible();
+  await expect(page.locator('.profile-drawings-more')).toHaveText('try again');
+  await expect(page.locator('#profile-recovery-heading')).toBeVisible();
+});
+
+test('profile previews five drawings and links to the paginated personal gallery', async ({page}) => {
+  const items = Array.from({length:6}, (_, index) => ({...drawing,prompt:`drawing ${index + 1}`}));
+  await fixture(page, {
+    '/api/profile/drawings': route => {
+      const params = new URL(route.request().url()).searchParams;
+      if (params.has('before')) return route.fulfill({json:{drawings:[items[5]],next:null}});
+      return route.fulfill({json:{drawings:params.has('preview') ? items : items.slice(0,5),next:'2026-10-01'}});
+    },
+  });
+  await page.goto('/profile');
+  await expect(page.locator('.profile-drawing-card')).toHaveCount(5);
+  await expect(page.locator('.profile-drawings-more')).toBeHidden();
+  await page.getByRole('link',{name:'your gallery',exact:true}).click();
+  await expect(page).toHaveURL(/\/gallery\?view=mine$/);
+  await expect(page.locator('.personal-gallery .archive-card')).toHaveCount(5);
+  await page.getByRole('button',{name:'load more',exact:true}).click();
+  await expect(page.locator('.personal-gallery .archive-card')).toHaveCount(6);
+  await expect(page.locator('#personal-gallery-more')).toBeHidden();
+  await page.reload();
+  await expect(page.locator('#page-heading')).toHaveText('your gallery');
+  await expect(page.locator('.personal-gallery .archive-card')).toHaveCount(5);
+});
+
 test('profile editing reads the active identity name instead of a cached guest name', async ({page}) => {
   await fixture(page,{
     '/api/profile': route => route.fulfill({json:{displayName:'account artist'}}),
@@ -204,12 +354,12 @@ test('guest linking needs explicit consent and a changed review must be confirme
     '/api/account/config': route => route.fulfill({json:{enabled:true,publishableKey:'pk_test_fixture',frontendHost:'fixture.clerk.accounts.dev'}}),
     '/api/account/register': route => route.fulfill({json:{authenticated:true,registered:true}}),
     '/api/account/guest-preview': route => route.fulfill({json:{revision:String(++reviews).repeat(32),drawings:[
-      {date:'2026-10-10',prompt:'a singing kite',conflict:reviews>1},
+      {id,existingId:'22222222-2222-4222-8222-222222222222',date:'2026-10-10',prompt:'a singing kite',conflict:reviews>1},
     ]}}),
     '/api/account/link-guest': route => {
       links++;
       expect(route.request().headers().authorization).toBe('Bearer fixture-token');
-      expect(route.request().postDataJSON()).toEqual({revision:String(links).repeat(32)});
+      expect(route.request().postDataJSON()).toEqual({revision:String(links).repeat(32),choices:links===1 ? {} : {[id]:'22222222-2222-4222-8222-222222222222'}});
       return links === 1 ? route.fulfill({status:409,json:{error:'your drawings changed'}})
         : route.fulfill({json:{linked:0,hidden:1,alreadyLinked:false}});
     },
@@ -219,6 +369,7 @@ test('guest linking needs explicit consent and a changed review must be confirme
   `}));
   await page.goto('/profile');
   const confirm = page.getByRole('button',{name:'link guest work',exact:true});
+  await expect(page.locator('#profile-recovery-heading')).toBeVisible();
   await expect(confirm).toBeVisible();
   await confirm.click();
   expect(links).toBe(0);
@@ -227,8 +378,9 @@ test('guest linking needs explicit consent and a changed review must be confirme
   await expect(page.locator('#guest-review-status')).toContainText('your drawings changed');
   await expect(confirm).toBeHidden();
   await page.getByRole('button',{name:'retry drawing review',exact:true}).click();
-  await expect(page.locator('#guest-review-list')).toContainText('would be hidden');
+  await expect(page.locator('#guest-review-list')).toContainText('choose one to keep');
   await expect(page.locator('#guest-link-consent')).not.toBeChecked();
+  await page.getByRole('radio',{name:'account drawing',exact:false}).check();
   await page.locator('#guest-link-consent').check();
   await confirm.click();
   await expect(page.locator('#guest-review-status')).toContainText('0 drawings linked; 1 drawing hidden');
@@ -396,6 +548,36 @@ test('fresh day shows instructions and preloads without mounting the editor unti
   await expect(page.locator('#canvas')).toBeVisible();
   await expect(page.locator('#review-drawing')).toBeEnabled();
   expect(errors).toEqual([]);
+});
+
+test('recent favorites refresh independently and stop requesting when drawing begins', async ({ page }) => {
+  let refreshes = 0;
+  await page.clock.install();
+  const { errors } = await fixture(page, {
+    '/api/highlights': route => route.fulfill({json:++refreshes === 1 ? [{...drawing,average:4.5,count:2}] : []}),
+  },{emptyDraft:true});
+  await page.goto('/');
+  await expect(page.locator('.highlight-card')).toHaveCount(1);
+  await expect(page.locator('.highlight-card')).toHaveAttribute('href',drawing.url);
+  await expect(page.locator('.highlight-card small')).toHaveText('4.5 / 5 · 2 ratings');
+  await page.locator('.home-highlights').scrollIntoViewIfNeeded();
+  await page.clock.fastForward(60000);
+  await expect(page.locator('.highlight-card')).toHaveCount(0);
+  await expect(page.locator('.highlights-status')).toContainText('no qualifying drawings');
+  await page.locator('#begin-drawing').click();
+  await expect(page.locator('#canvas')).toBeVisible();
+  const before = refreshes;
+  await page.clock.fastForward(60000);
+  expect(refreshes).toBe(before);
+  expect(errors).toEqual([]);
+});
+
+test('recent favorites failure leaves drawing available', async ({ page }) => {
+  await fixture(page,{'/api/highlights':route=>route.fulfill({status:503,json:{error:'unavailable'}})},{emptyDraft:true});
+  await page.goto('/');
+  await expect(page.locator('.highlights-status')).toContainText('could not refresh');
+  await expect(page.locator('#begin-drawing')).toBeEnabled();
+  await expect(page.locator('.home-highlights button')).toBeVisible();
 });
 
 test('removed submission shows its reason without an editor, image, or sharing actions', async ({ page }) => {

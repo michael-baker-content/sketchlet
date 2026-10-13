@@ -24,7 +24,7 @@ http.createServer(async (req, res) => {
     if (pathname === '/api/account' || pathname.startsWith('/api/account/')) {
       await handleAccount(req, res, pathname); return;
     }
-    if (pathname === '/profile' || pathname === '/profile/' || pathname === '/profile.html') {
+    if (['/profile','/profile/','/profile.html','/free-draw','/free-draw/','/free-draw.html'].includes(pathname)) {
       await handlePublicPage(req, res, url); return;
     }
     if (pathname === '/api/admin' || pathname.startsWith('/api/admin/')) {

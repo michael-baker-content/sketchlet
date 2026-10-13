@@ -1,0 +1,129 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;700&family=IBM+Plex+Sans:wght@400;600;700&display=swap');
+/* Explanations and code have their own typefaces; the drawing UI keeps Unkempt. */
+:root{--font-display:'Unkempt',cursive;--font-reading:'IBM Plex Sans',Arial,sans-serif;--font-code:'IBM Plex Mono',Consolas,Menlo,monospace}
+.information-copy,.admin-content,.admin-review-dialog,.submission-dialog :is(p,label,small),.reading-copy{
+  font-family:var(--font-reading);font-size:16px;line-height:1.6;text-transform:none;letter-spacing:normal
+}
+.information-copy{max-width:68ch}
+.information-copy :is(h1,h2,h3),.admin-content :is(h1,h2,h3),.admin-review-dialog :is(h1,h2,h3){font-family:var(--font-display);text-transform:lowercase}
+.information-copy h2{font-size:26px}
+.information-copy :is(button,.web-button,[role=status]),.admin-content :is(button,.web-button,[role=status]),.admin-review-dialog :is(button,[role=status]),.submission-dialog [role=status]{font-family:var(--font-display);text-transform:lowercase}
+/* Live-region semantics do not make procedural guidance a short status. */
+.information-copy [role=status].reading-copy,.admin-content [role=status].reading-copy,.submission-dialog [role=status].reading-copy{font-family:var(--font-reading);font-size:16px;line-height:1.6;text-transform:none}
+.information-copy :is(input,textarea,select),.admin-content :is(input,textarea,select),.admin-review-dialog :is(input,textarea,select),.submission-dialog :is(input,textarea,select){font-family:var(--font-reading);font-size:16px;text-transform:none}
+.information-copy #profile-name,.submission-dialog #profile-name,.drawing-author,.profile-drawing-card strong{font-family:var(--font-display);text-transform:none}
+.information-copy #profile-name{font-size:20px}
+.submission-dialog p .web-button,.submission-dialog .dialog-actions button{font-family:var(--font-display);text-transform:lowercase}
+.information-copy .profile-drawing-card strong{font-size:18px}
+.information-copy :is([role=alert],.empty-state),.admin-content [role=alert]{font-family:var(--font-reading);text-transform:none}
+.information-copy :is(p,li),.reading-copy{overflow-wrap:anywhere}
+.information-copy li+li{margin-top:.5em}
+.procedure-steps{padding-left:1.6em;margin-block:1em}
+.procedure-steps li::marker{font-weight:bold;color:#523a80}
+.content-notice{padding:12px 16px;border:2px solid;border-color:#faf7fc #a69bad #a69bad #faf7fc;background:#ded8e4;color:#342440;margin-block:16px;border-radius:0}
+.content-notice>strong:first-child{display:block;margin-bottom:6px}
+.content-notice p{margin:6px 0}
+.content-notice ul{margin:8px 0;padding-left:1.3em}
+.content-notice--important{background:#e3dee8;font-size:15px}
+.content-notice--important>strong:first-child{font-weight:600;padding-bottom:6px}
+.content-notice--important li strong{font-weight:600}
+/* An inset terminal surface for actionable lookup results, not transient feedback. */
+.terminal-output,.information-copy [role=status].terminal-output{
+  font-family:var(--font-code);font-size:14px;line-height:1.7;text-transform:none;
+  color:#f1e8f8;background:#302638;border:3px solid;border-color:#75657f #faf7fc #faf7fc #75657f;
+  border-radius:0;padding:16px;margin-block:16px;max-width:100%;min-width:0;overflow-wrap:anywhere;white-space:normal
+}
+@media(forced-colors:active){.terminal-output,.information-copy [role=status].terminal-output{border-color:CanvasText}}
+.information-copy .draft-notice{font-family:var(--font-reading);text-transform:none}
+.admin-content :is(pre,code),.admin-review-dialog :is(pre,code),.transfer-output input,.admin-decision-target{font-family:var(--font-code);text-transform:none;font-size:14px}
+.admin-content pre,.admin-review-dialog pre{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;padding:12px;border:2px inset #eee;background:#f8f4fc}
+.information-copy .transfer-output input{font-family:var(--font-code)}
+@media(max-width:400px){.content-notice{padding:10px}.information-copy{padding-inline:12px}}
+
+/* Opt-in site chrome: never applied to the canvas toolbar or focus controls. */
+.web-button.site-button{
+  --button-fill:#d9c7ed;--button-hover:#e4d5f4;--button-ink:#352145;
+  position:relative;background:var(--button-fill);color:var(--button-ink);
+  font-family:var(--font-display);text-transform:lowercase;border-radius:0;
+  border:3px solid;border-color:#fff8 #65527299 #65527299 #fff8;
+  box-shadow:2px 2px 0 #554360;isolation:isolate
+}
+.web-button.site-button::after{
+  content:'';position:absolute;inset:-3px;pointer-events:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 44' preserveAspectRatio='none'%3E%3Cpath d='M2 2 L37 1.5 L73 2.4 L112 1.5 L150 2 L178 1.8 L177.5 20 L178 42 L139 41.4 L96 42 L54 41.5 L2 42 L2.5 23 Z' fill='none' stroke='%23554360' stroke-width='1.2' stroke-linejoin='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat
+}
+.web-button.site-button.primary{--button-fill:#c8e5b5;--button-hover:#d8efc9;--button-ink:#244019;font-weight:700}
+.web-button.site-button.utility{--button-fill:#d2e3ef;--button-hover:#e2eff8;--button-ink:#243c50}
+.web-button.site-button.danger{--button-fill:#efc4ad;--button-hover:#f8d5c2;--button-ink:#532e21}
+@media(hover:hover){.web-button.site-button:not(:disabled):hover{background:var(--button-hover)}}
+.web-button.site-button:not(:disabled):active{border-color:#65527299 #fff8 #fff8 #65527299;box-shadow:none;transform:translate(1px,1px)}
+.web-button.site-button:focus-visible{outline:3px solid #4a147b;outline-offset:4px}
+.web-button.site-button:disabled{box-shadow:none;opacity:.5;cursor:default}
+@media(forced-colors:active){
+  .web-button.site-button{background:ButtonFace;color:ButtonText;border-color:ButtonText;box-shadow:none}
+  .web-button.site-button::after{display:none}
+  .web-button.site-button:focus-visible{outline-color:Highlight}
+  .web-button.site-button:disabled{color:GrayText;border-color:GrayText;opacity:1}
+}
+
+/* A single pen stroke: small changes in direction, without a repeating wave. */
+:root{
+  --sketch-divider:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 12' preserveAspectRatio='none'%3E%3Cpath d='M2 7 L31 6 L69 7.5 L110 5.5 L146 6 L183 4.5 L225 6 L269 5 L307 7 L351 5.5 L390 6.5 L430 5 L468 7 L508 6 L549 7.5 L578 6 L598 6.5' fill='none' stroke='%23827294' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E")
+}
+:is(#guest-review,.profile-details,.guest-transfer,.profile-drawings),.admin-content section + section{position:relative;border-top:0}
+:is(#guest-review,.profile-details,.guest-transfer,.profile-drawings)::before,.admin-content section + section::before{
+  content:'';position:absolute;top:0;left:0;width:100%;height:12px;
+  background:var(--sketch-divider) center / 100% 12px no-repeat;pointer-events:none
+}
+.profile-page .guest-transfer::before{transform:scaleX(-1)}
+.profile-page .profile-drawings::before{transform:scaleY(-1)}
+.content-notice--important>strong:first-child{position:relative;border-bottom:0;padding-bottom:12px}
+.content-notice--important>strong:first-child::after{
+  content:'';position:absolute;bottom:0;left:0;width:100%;height:8px;
+  background:var(--sketch-divider) center / 100% 8px no-repeat;opacity:.65;pointer-events:none
+}
+@media(forced-colors:active){
+  :is(#guest-review,.profile-details,.guest-transfer,.profile-drawings)::before,
+  .admin-content section + section::before,
+  .content-notice--important>strong:first-child::after{background:none;border-top:1px solid CanvasText}
+}
+.site-header,.site-footer,.account-notice{position:relative}
+.site-header::after,.site-footer::before,.site-footer::after,.account-notice::before,.account-notice::after{
+  content:'';position:absolute;left:0;width:100%;height:12px;
+  background:var(--sketch-divider) center / 100% 12px no-repeat;pointer-events:none
+}
+.site-header::after,.site-footer::after,.account-notice::after{bottom:0}
+.site-footer::before,.account-notice::before{top:0;transform:scaleX(-1)}
+@media(forced-colors:active){
+  .site-header::after,.site-footer::before,.site-footer::after,.account-notice::before,.account-notice::after{background:none;border-top:1px solid CanvasText}
+}
+
+/* Profile first; migration is available on demand, below everyday tasks. */
+.profile-account{padding-bottom:8px}
+.profile-account .account-notice{margin-top:0}
+.profile-session-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:16px}
+.profile-session-row .account-notice{flex:1 1 26rem;min-width:0;margin-bottom:0}
+.profile-session-row #account-sign-out{flex:0 0 auto}
+.profile-editor,.profile-details .profile-drawings{min-width:0}
+.profile-recovery{margin-block:20px;background:#dce6ed;border:2px outset #eef4f8}
+.profile-recovery>h2{margin-top:0}
+.profile-recovery .guest-transfer{padding-top:16px;margin-top:24px}
+.recovery-content{padding-top:8px}
+.welcome-columns{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;padding:12px}
+.welcome-day,.home-highlights{min-width:0;background:#eee8f4;border:2px outset #f8f4fc}
+.home-highlights{background:#dce6ed;padding-bottom:16px}
+.home-highlights>.web-button{margin-inline:16px}
+.highlights-description,.highlights-status{margin:12px 16px}
+.highlights-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:0 16px}
+.highlight-card{display:flex;flex-direction:column;gap:4px;min-width:0;color:#352145;text-decoration:none;overflow-wrap:anywhere}
+.highlight-card img{display:block;width:100%;height:auto;aspect-ratio:1;object-fit:contain;border:2px inset #eee;background:white}
+.highlight-card span,.highlight-card small{font-family:var(--font-reading);font-size:12px;text-transform:none}
+.highlight-card:hover strong{text-decoration:underline}
+.highlight-card:focus-visible{outline:3px solid #4a147b;outline-offset:3px}
+@media(min-width:900px){.welcome-columns{grid-template-columns:repeat(2,minmax(0,1fr));align-items:stretch}.welcome-columns .drawing-welcome{padding:20px 16px}}
+@media(min-width:900px){
+  .profile-details{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:32px;max-width:100%;align-items:start}
+  .profile-details .profile-drawings{margin-top:0;padding-top:0;border-top:0}
+  .profile-details .profile-drawings::before{display:none}
+  .profile-details h2{margin-top:12px}
+}

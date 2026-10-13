@@ -21,6 +21,22 @@ test('saved drafts reject corrupt geometry and unsupported tools', () => {
   assert.equal(validDocument({ background: '#FFFFFF', strokes: [{ tool: 'brush', color: '#343044', size: 14, points: [[NaN, 4]] }] }), false);
   assert.equal(validDocument({ background: '#FFFFFF', strokes: [{ tool: 'other', color: '#343044', size: 14, points: [[4, 4]] }] }), false);
 });
+test('free draw storage stays isolated from daily drafts', () => {
+  const document = {background:'#B39ADB',strokes:[]};
+  assert.equal(draftKey('free-draw'),'free-draw-v1');
+  assert.notEqual(draftKey('free-draw'),draftKey('2026-10-12'));
+  assert.deepEqual(restoreDraft({day:'free-draw',document},'free-draw'),document);
+  assert.deepEqual(restoreDraft({day:'free-draw',document},'2026-10-12'),createDocument());
+  assert.deepEqual(restoreDraft({day:'2026-10-12',document},'free-draw'),createDocument());
+});
+
+test('image seeds must be bounded PNG data and the first stroke', () => {
+  const image = {tool:'image',image:'data:image/png;base64,AAAA'};
+  assert.equal(validDocument({background:'#FFFFFF',strokes:[image]}),true);
+  assert.equal(validDocument({background:'#FFFFFF',strokes:[image,image]}),false);
+  assert.equal(validDocument({background:'#FFFFFF',strokes:[{...image,image:'https://example.com/image.png'}]}),false);
+});
+
 test('daily drafts restore only for their original prompt date', () => {
   const document = { background: '#B39ADB', strokes: [{ tool: 'brush', color: '#343044', size: 14, points: [[10,10]] }] };
   const saved = { day: '2026-10-02', document };

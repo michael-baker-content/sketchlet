@@ -18,21 +18,22 @@ export function mountProfilePhoto() {
 
 // A separate instance is mounted for each identity; disposal rejects late responses.
 export function mountProfileDetails(root, request) {
-  let active = true, busy = false, photoRevision = 0, next = null;
+  let active = true, busy = false, photoRevision = 0;
   let savedPhoto = readPhoto(), pendingPhoto = savedPhoto;
-  root.innerHTML = `<h2>your profile</h2><form id="profile-edit-form">
+  root.innerHTML = `<div class="profile-editor"><h2>your profile</h2><form id="profile-edit-form">
     <label class="name-field">name (optional)<input id="profile-name" maxlength="32" autocomplete="nickname" disabled></label>
-    <p>your name appears on your drawings. leave it blank to appear as anonymous.</p>
+    <p>Your name appears on your drawings. Leave it blank to appear as anonymous.</p>
     <div class="profile-photo"><img id="profile-photo-preview" alt="your local profile photo" hidden>
     <label class="name-field">photo (optional)<input id="profile-photo-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
-    <button type="button" class="web-button" id="remove-profile-photo">remove photo</button>
-    <p>your photo stays in this browser. it is not uploaded or visible to others.</p></div>
+    <button type="button" class="web-button site-button danger" id="remove-profile-photo">remove photo</button>
+    <p>Your photo stays in this browser. It is not uploaded or visible to others.</p></div>
     <p id="profile-edit-status" role="status">loading profile…</p>
-    <button class="web-button" id="save-name" disabled>save profile</button></form>
-    <button class="web-button" id="profile-load-retry" hidden>retry profile</button>
+    <button class="web-button site-button primary" id="save-name" disabled>save profile</button></form>
+    <button class="web-button site-button utility" id="profile-load-retry" hidden>retry profile</button></div>
     <section class="profile-drawings" aria-labelledby="profile-drawings-heading"><h2 id="profile-drawings-heading">your drawings</h2>
+    <p>Your five most recent drawings appear here. See the full collection in <a href="/gallery?view=mine">your gallery</a>.</p>
     <div class="profile-drawing-list"></div><p class="profile-drawing-status" role="status"></p>
-    <button class="web-button profile-drawings-more" hidden>load more</button></section>`;
+    <button class="web-button site-button utility profile-drawings-more" hidden>try again</button></section>`;
   const $ = selector => root.querySelector(selector);
   const form = $('#profile-edit-form'), name = $('#profile-name'), status = $('#profile-edit-status'), save = $('#save-name');
   const fileInput = $('#profile-photo-file'), remove = $('#remove-profile-photo');
@@ -44,17 +45,17 @@ export function mountProfileDetails(root, request) {
     try { const profile = await request('/api/profile'); if (!active) return; name.value = profile.displayName || ''; status.textContent = ''; controls(false); }
     catch (error) { if (active) { status.textContent = error.message; $('#profile-load-retry').hidden = false; } }
   }
-  async function drawings(before = null) {
+  async function drawings() {
     more.hidden = true; drawingStatus.textContent = 'loading your drawings…';
     try {
-      const result = await request('/api/profile/drawings' + (before ? '?before=' + encodeURIComponent(before) : ''));
+      const result = await request('/api/profile/drawings?preview=1');
       if (!active) return;
-      if (!before) list.replaceChildren();
-      for (const drawing of result.drawings) {
+      list.replaceChildren();
+      for (const drawing of result.drawings.slice(0,5)) {
         const card = document.createElement(drawing.removed ? 'article' : 'a'); card.className = 'profile-drawing-card';
         if (!drawing.removed) {
           card.href = drawing.url;
-          const image = document.createElement('img'); image.src = drawing.image; image.alt = drawing.prompt; image.loading = 'lazy'; card.append(image);
+          const image = document.createElement('img'); image.width = image.height = 72; image.src = drawing.image; image.alt = drawing.prompt; image.loading = 'lazy'; card.append(image);
         }
         const caption = document.createElement('span'), title = document.createElement('strong'), date = document.createElement('time');
         title.textContent = drawing.prompt; date.dateTime = drawing.date; date.textContent = formatPromptDate(drawing.date);
@@ -62,9 +63,8 @@ export function mountProfileDetails(root, request) {
         if (drawing.removed) { const reason = document.createElement('small'); reason.textContent = drawing.reason; caption.append(reason); }
         card.append(caption); list.append(card);
       }
-      next = result.next; more.textContent = 'load more'; more.hidden = !next;
       drawingStatus.textContent = list.children.length ? '' : 'no drawings yet. save your first drawing to the gallery to see it here.';
-    } catch (error) { if (active) { drawingStatus.textContent = error.message; next = before; more.textContent = 'try again'; more.hidden = false; } }
+    } catch (error) { if (active) { drawingStatus.textContent = error.message; more.hidden = false; } }
   }
   fileInput.onchange = async () => {
     const file = fileInput.files[0], version = ++photoRevision;
@@ -103,7 +103,10 @@ export function mountProfileDetails(root, request) {
     } catch (error) { if (active) status.textContent = error.message; }
     finally { busy = false; if (active) controls(false); }
   };
-  $('#profile-load-retry').onclick = loadName; more.onclick = () => drawings(next);
-  controls(true); showPhoto(); loadName(); drawings();
-  return () => { active = false; photoRevision++; root.replaceChildren(); };
+  $('#profile-load-retry').onclick = loadName; more.onclick = drawings;
+  controls(true); showPhoto();
+  const dispose = () => { active = false; photoRevision++; root.replaceChildren(); };
+  // Initial content (or its retry state) is ready together; thumbnails stay lazy.
+  dispose.ready = Promise.all([loadName(), drawings()]);
+  return dispose;
 }

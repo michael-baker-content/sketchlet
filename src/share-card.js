@@ -105,7 +105,7 @@ export function openShareCard(drawing, trigger) {
   const dialog = document.createElement('dialog');
   dialog.className = 'share-card-dialog';
   dialog.setAttribute('aria-labelledby', 'share-card-title');
-  dialog.innerHTML = '<div class="share-card-heading"><h2 id="share-card-title">share card</h2><button class="web-button" data-close aria-label="close share card">close</button></div><p class="share-card-status" role="status">creating your card…</p><img class="share-card-preview" hidden><div class="share-card-actions"><button class="web-button primary" data-copy disabled>copy image</button><a class="web-button" data-download hidden>download png</a><button class="web-button" data-retry hidden>try again</button></div>';
+  dialog.innerHTML = '<div class="share-card-heading"><h2 id="share-card-title">share card</h2><button class="web-button site-button utility" data-close aria-label="close share card">close</button></div><p class="share-card-status" role="status">creating your card…</p><img class="share-card-preview" hidden><div class="share-card-actions"><button class="web-button site-button primary" data-copy disabled>copy image</button><a class="web-button site-button" data-download hidden>download png</a><button class="web-button site-button utility" data-retry hidden>try again</button></div>';
   setCloseIcon(dialog.querySelector('[data-close]'));
   const preview = dialog.querySelector('img');
   preview.alt = `sketchlet card: ${drawingCaption(drawing.displayName, drawing.prompt)}, ${formatPromptDate(drawing.date)}`;

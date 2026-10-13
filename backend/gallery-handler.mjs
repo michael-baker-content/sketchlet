@@ -73,8 +73,21 @@ return async function handleApi(req, res, pathname) {
       await limit(owner);
     }
     const url = new URL(req.url, origin);
+    if (pathname === '/api/highlights' && req.method === 'GET') {
+      const day = easternDate();
+      const rows = await sql`SELECT d.id,d.prompt_day::text AS day,p.title,d.owner_hash,profile.display_name,
+        stats.average,stats.count
+        FROM sketchlet_public_drawings d JOIN sketchlet_prompts p ON p.day=d.prompt_day
+        LEFT JOIN sketchlet_profiles profile ON profile.owner_hash=d.owner_hash
+        CROSS JOIN LATERAL (SELECT avg(stars) AS average,count(*) AS count FROM sketchlet_votes v WHERE v.drawing_id=d.id) stats
+        WHERE d.prompt_day BETWEEN ${day}::date-13 AND ${day}::date
+          AND stats.count>=2 AND stats.average>=4
+        ORDER BY stats.average DESC,stats.count DESC,d.created_at DESC,d.id DESC LIMIT 4`;
+      json(res,200,rows.map(row => publicDrawing(row,owner))); return;
+    }
     if (pathname === '/api/profile/drawings' && req.method === 'GET') {
       const before = profileDrawingCursor(url.searchParams.get('before'));
+      const pageSize = url.searchParams.get('preview') === '1' ? 5 : 24;
       // Verified account identity or the active guest cookie determines ownership. One entry per day
       // makes the prompt date a stable cursor even when new drawings are submitted.
       const rows = await sql`SELECT d.id,d.prompt_day::text AS day,p.title,d.owner_hash,profile.display_name,m.status,m.public_reason,
@@ -85,9 +98,9 @@ return async function handleApi(req, res, pathname) {
         LEFT JOIN sketchlet_drawing_moderation m ON m.drawing_id=d.id
         WHERE d.owner_hash=${owner} AND (${before}::date IS NULL OR d.prompt_day<${before}::date)
           AND NOT EXISTS(SELECT 1 FROM sketchlet_link_conflicts conflict WHERE conflict.drawing_id=d.id)
-        ORDER BY d.prompt_day DESC LIMIT 25`;
-      const page = rows.slice(0,24);
-      json(res,200,{drawings:page.map(row=>publicDrawing(row,owner)),next:rows.length>24?page.at(-1).day:null}); return;
+        ORDER BY d.prompt_day DESC LIMIT ${pageSize + 1}`;
+      const page = rows.slice(0,pageSize);
+      json(res,200,{drawings:page.map(row=>publicDrawing(row,owner)),next:rows.length>pageSize?page.at(-1).day:null}); return;
     }
     if (pathname === '/api/profile' && req.method === 'GET') {
       const [profile] = await sql`SELECT display_name FROM sketchlet_profiles WHERE owner_hash=${owner}`;

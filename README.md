@@ -55,7 +55,7 @@ Old prompts remain open for looking and rating; new submissions belong to today'
 
 You can draw as a guest, remembered by a browser cookie. Optional Clerk accounts are in pre-release verification; the profile page supports account sign-in when configured.
 
-Your profile holds an optional display name and a newest-first collection of **your drawings**, with dates and ratings. Changing your name updates the attribution on earlier drawings too. Names aren't unique or verified; leaving yours blank displays “anonymous.” A name is required for rating.
+Your profile holds an optional display name and a preview of your five most recent drawings, with a link to **your gallery** for the full collection. Changing your name updates the attribution on earlier drawings too. Names aren't unique or verified; leaving yours blank displays “anonymous.” A name is required for rating.
 
 You can also add a profile photo for your own interface. It is resized and saved locally in your browser, never uploaded or shown to other visitors.
 
@@ -68,7 +68,7 @@ A few things to keep in mind:
 
 ## behind the doodles
 
-Sketchlet uses **HTML, CSS, and JavaScript**, with the Canvas API doing the drawing. **Unkempt** from Google Fonts supplies the handwriting; beveled controls and lavender panels supply the nostalgia.
+Sketchlet uses **HTML, CSS, and JavaScript**, with the Canvas API doing the drawing. **Unkempt** supplies the handwriting, **IBM Plex Sans** makes longer explanations readable, and **IBM Plex Mono** handles technical content. Beveled controls, hand-drawn dividers, and shaded diamond tiles supply the nostalgia.
 
 **Vercel** serves the site and its Node.js API. **Neon Postgres** stores prompts, drawings, guest profiles, and votes. PNGs live in a private **Neon Object Storage** bucket and are served through the API. **Sharp** validates and re-encodes submitted images.
 
@@ -79,13 +79,14 @@ Public page metadata is rendered server-side for social crawlers. All shared lin
 The main pieces are:
 
 - `src/studio.js`, `src/model.js`, and `src/brushes.js`: canvas, tools, undo, and shared stroke-spacing rules.
-- `src/draft-storage.js`: shared access to date-scoped IndexedDB drafts for home startup and the editor.
+- `src/draft-storage.js`: shared access to daily and independently stored free-draw IndexedDB drafts.
+- `src/free-draw-page.js`: `/free-draw` offers a persistent practice canvas with the same tools, full-screen mode, and PNG download. Completed drawings offer a blank canvas or a flattened copy of the submitted image; confirmation protects an existing practice draft. The original gallery entry is unchanged. Opening the bare URL restores the saved practice canvas. `src/editor-loader.js` shares editor loading with the daily page.
 - `src/canvas-cache.js` and `src/pointer-input.js`: reuse rendered strokes and map batched pointer samples to canvas coordinates.
-- `backend/page-shell.mjs`: shared HTML template for the separate home, gallery, and admin pages, generated during the build and rendered directly by the page server.
+- `backend/page-shell.mjs`: shared HTML shell for home, gallery, profile, free draw, admin, and information pages, generated during the build and rendered directly by the page server.
 - `src/home-page.js`: today's page; submission status is checked before loading an editor.
 - `src/gallery-page.js`: gallery and shared-drawing pages, independent of the editor and today's status request.
-- `src/editor.html` and `src/submission.js`: drawing markup and submission controls, loaded only for an unfinished day.
-- `src/gallery.js`: shared profile and community views, with page initialization explicitly called by each entry point.
+- `src/editor.html`: drawing markup shared by unfinished daily drawings and free draw. `src/submission.js` adds daily submission controls only.
+- `src/gallery.js`: daily page presentation and community/personal galleries. `src/profile-page.js` owns account and profile management.
 - `src/api-client.js` and `src/page-startup.js`: API requests and conditional home startup.
 - `src/text-format.js`: singular/plural count labels and creator captions shared by gallery text, share cards, and link metadata.
 - `backend/social.mjs`, `backend/social-data.mjs`, and `api/pages.js`: crawler-friendly page metadata and generated social preview images.
@@ -101,15 +102,15 @@ The main pieces are:
 
 Daily prompts now follow a [26-week curated calendar](docs/PROMPTS.md), mixing simple visual twists, familiar named subjects, and occasional pairs or trios. Existing prompt galleries retain their original titles.
 
-Sketchlet is an early version. Accounts and cross-device history, community-suggested prompts, and old-draft recovery are future work.
+Sketchlet is an early version. Optional accounts and reviewed guest-drawing transfers are implemented. Friend groups, community-suggested prompts, and old-draft recovery are future work.
 
 The `/admin` page supports owner-only GitHub sign-in, submission and report review, reversible drawing removal, display-name clearing, and an activity log. Visitors can report drawings without logging in. Hidden drawings remain that day's submission and cannot be replaced. Guest restrictions, prompt management, and email alerts are still planned.
 
-Public gallery browsing currently covers up to 90 prompt dates and 200 drawings per prompt. Your profile's drawing list loads in pages of 24.
+Public gallery browsing currently covers up to 90 prompt dates and 200 drawings per prompt. Your profile previews five drawings; your personal gallery loads in pages of 24.
 
 ## keeping the pencils sharp
 
-The dedicated `/profile` page contains name/photo editing, personal drawings, and optional account controls. Clerk sessions map to internal Neon accounts, and guest work can be linked after explicit review and confirmation. Existing account drawings win same-day conflicts; conflicting guest drawings are hidden. Friend groups are planned separately. See [account setup, required database verification, and the groups plan](docs/ACCOUNTS.md) before releasing accounts.
+The dedicated `/profile` page contains name/photo editing, personal drawings, and optional account controls. Clerk sessions map to internal Neon accounts. Guest work from this browser or another address can be linked after explicit review and confirmation. Users choose which drawing to keep for each overlapping date; unselected drawings remain stored but hidden. Friend groups are planned separately. See [account setup, required database verification, and the groups plan](docs/ACCOUNTS.md) before releasing accounts.
 
 The shared footer links to About, Privacy, and Community & Terms. These are visibly marked drafts, readable without JavaScript, and excluded from search indexing. Review the [public-page publication checklist](docs/PUBLIC-PAGES.md) before treating them as final policies. Deploying the current build makes the drafts publicly accessible.
 

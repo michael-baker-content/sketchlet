@@ -9,6 +9,7 @@
     "api/pages.js": { "maxDuration": 30, "includeFiles": "src/assets/favicon.svg" }
   },
   "redirects": [
+    { "source": "/free-draw.html", "destination": "/free-draw", "permanent": true },
     { "source": "/profile.html", "destination": "/profile", "permanent": true },
     { "source": "/:page(about|privacy|community|contact).html", "destination": "/:page", "permanent": true },
     { "source": "/admin.html", "destination": "/admin", "permanent": true },
@@ -16,6 +17,8 @@
     { "source": "/gallery.html", "destination": "/gallery", "permanent": true }
   ],
   "rewrites": [
+    { "source": "/free-draw", "destination": "/api/pages?__page=/free-draw" },
+    { "source": "/free-draw/", "destination": "/api/pages?__page=/free-draw" },
     { "source": "/profile", "destination": "/api/pages?__page=/profile" },
     { "source": "/profile/", "destination": "/api/pages?__page=/profile" },
     { "source": "/:page(about|privacy|community|contact)", "destination": "/api/pages?__page=/:page" },

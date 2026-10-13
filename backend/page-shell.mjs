@@ -3,6 +3,7 @@ import { informationPages } from './information-pages.mjs';
 const pages = new Map([
   ['index.html', { title:'sketchlet - a little drawing every day', label:'today', script:'/src/home-page.js' }],
   ['gallery.html', { title:'gallery — sketchlet', label:'gallery', script:'/src/gallery-page.js' }],
+  ['free-draw.html', { title:'free draw — sketchlet', label:'free draw', script:'/src/free-draw-page.js' }],
   ['admin.html', { title:'admin — sketchlet', label:'administration', script:'/src/admin-page.js' }],
   ['profile.html', { title:'profile — sketchlet', label:'profile', script:'/src/profile-page.js', draft:true }],
 ]);
@@ -28,6 +29,7 @@ export function renderPageShell(file) {
   <link rel="stylesheet" href="/src/styles/playful.css">
   <link rel="stylesheet" href="/src/styles/retro.css">
   <link rel="stylesheet" href="/src/styles/flow.css">
+  <link rel="stylesheet" href="/src/styles/content.css">
   <link rel="stylesheet" href="/src/styles/loading.css">
 </head>
 <body>
@@ -37,7 +39,7 @@ export function renderPageShell(file) {
     <p id="loading-message">loading sketchlet…</p>
     <button id="loading-retry" class="web-button" hidden>try again</button>
   </div>
-  ${page.content ? '' : '<noscript><p>please enable javascript to use sketchlet.</p></noscript>'}
+  ${page.content ? '' : '<noscript><p>Please enable javascript to use sketchlet.</p></noscript>'}
   <header class="site-header">
     <a class="brand" href="/" aria-label="sketchlet home">sketchlet</a>
     <nav aria-label="main navigation"><a id="open-home" href="/">home</a><a id="open-archive" href="/gallery">gallery</a><a href="/profile"${file === 'profile.html' ? ' aria-current="page"' : ''}>profile</a></nav>
@@ -45,7 +47,7 @@ export function renderPageShell(file) {
   <main id="main-content" tabindex="-1">
     <section id="page-content" class="flow-panel" aria-labelledby="page-heading">
       <div class="panel-title"><h1 id="page-heading">${page.label}</h1></div>
-      ${page.content ? `<article class="information-copy">${page.draft ? '<p class="draft-notice"><strong>draft for review</strong> · updated oct. 10, 2026. this page is not a finalized policy.</p>' : ''}${page.content}</article>` : '<div class="empty-state" role="status">loading…</div>'}
+      ${page.content ? `<article class="information-copy">${page.draft ? '<p class="draft-notice"><strong>Draft for review</strong> · updated oct. 10, 2026. This page is not a finalized policy.</p>' : ''}${page.content}</article>` : '<div class="empty-state" role="status">loading…</div>'}
     </section>
   </main>
   <footer class="site-footer">

@@ -21,7 +21,7 @@ export function startupError(error) {
   message.setAttribute('role', 'alert');
   message.textContent = error.message || 'could not load this page.';
   const retry = document.createElement('button');
-  retry.className = 'web-button';
+  retry.className = 'web-button site-button utility';
   retry.textContent = 'try again';
   retry.onclick = () => window.location.reload();
   panel.append(message, retry);

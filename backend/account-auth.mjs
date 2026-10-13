@@ -1,5 +1,12 @@
 import { allowedOrigins, httpError, readJson } from './http.mjs';
 import { guestOwner, guestVisitor } from './guest-identity.mjs';
+import { createHash, randomBytes } from 'node:crypto';
+
+function validChoices(value) {
+  const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    && Object.entries(value).every(([key,id]) => uuid.test(key) && typeof id === 'string' && uuid.test(id));
+}
 
 export function accountConfig(env = process.env) {
   // The dashboard's framework selector changes the suggested variable name,
@@ -46,21 +53,49 @@ export function createAccountHandler({ getConfig = accountConfig, verify = verif
       if (pathname === '/api/account/config' && req.method === 'GET') {
         send(200, config ? { enabled:true, publishableKey:config.publishableKey, frontendHost:config.frontendHost } : { enabled:false }); return;
       }
-      const methods = {'/api/account/session':'GET','/api/account/register':'POST','/api/account/guest-preview':'GET','/api/account/link-guest':'POST','/api/account/sign-out':'POST'};
+      const methods = {'/api/account/session':'GET','/api/account/register':'POST','/api/account/guest-preview':'GET','/api/account/link-guest':'POST','/api/account/sign-out':'POST','/api/account/transfer-code':'POST','/api/account/transfer-preview':'POST','/api/account/transfer-confirm':'POST'};
       if (!methods[pathname]) throw httpError(404, 'not found');
       if (req.method !== methods[pathname]) throw httpError(405, 'method not allowed');
       if (!config) throw httpError(503, 'account sign-in is not available yet');
       let input;
       if (req.method === 'POST') {
-        if (!config.origins.has(req.headers.origin)) throw httpError(403, 'request origin does not match this site');
+        const legacyTransfer = pathname === '/api/account/transfer-code' && req.headers.origin === 'https://sketchlet-blush.vercel.app';
+        if (!config.origins.has(req.headers.origin) && !legacyTransfer) throw httpError(403, 'request origin does not match this site');
         input = await readJson(req);
-        if (pathname.endsWith('/link-guest')) {
-          if (Object.keys(input).length !== 1 || typeof input.revision !== 'string' || !/^[a-f0-9]{32}$/.test(input.revision)) throw httpError(400, 'please review your drawings before linking');
+        if (pathname.endsWith('/link-guest') || pathname.endsWith('/transfer-confirm')) {
+          if ('choices' in input && !validChoices(input.choices)) throw httpError(400,'choose a drawing for each overlapping date');
+        }
+        if (pathname.endsWith('/transfer-preview') || pathname.endsWith('/transfer-confirm')) {
+          const confirm = pathname.endsWith('/transfer-confirm');
+          if (Object.keys(input).some(key => !(confirm ? ['code','revision','choices'] : ['code']).includes(key)) || !/^[a-f0-9]{64}$/.test(input.code || '') || typeof input.code !== 'string'
+            || (confirm && (typeof input.revision !== 'string' || !/^[a-f0-9]{32}$/.test(input.revision)))) throw httpError(400,'enter a valid transfer code and review before confirming');
+        } else if (pathname.endsWith('/link-guest')) {
+          if (Object.keys(input).some(key => !['revision','choices'].includes(key)) || typeof input.revision !== 'string' || !/^[a-f0-9]{32}$/.test(input.revision)) throw httpError(400, 'please review your drawings before linking');
         } else if (Object.keys(input).length) throw httpError(400, 'unexpected account fields');
       }
+      if (pathname.endsWith('/transfer-code')) {
+        const guest = guestOwner(req);
+        if (!guest) throw httpError(409,'no guest drawings are available on this address');
+        const code = randomBytes(32).toString('hex');
+        const store = await getStore();
+        if (!await store.issueTransfer(guest,createHash('sha256').update(code).digest('hex'))) throw httpError(409,'no unlinked guest drawings are available on this address');
+        send(200,{code}); return;
+      }
       const userId = await verify(req, config);
+      if (pathname.endsWith('/transfer-preview') || pathname.endsWith('/transfer-confirm')) {
+        const store = await getStore();
+        const account = await store.find(config.frontendHost,userId);
+        if (!account) throw httpError(409,'please finish connecting your account first');
+        const hash = createHash('sha256').update(input.code).digest('hex');
+        const result = pathname.endsWith('/transfer-preview') ? await store.transferPreview(account.id,hash) : await store.redeemTransfer(account.id,hash,input.revision,input.choices || {});
+        if (result.error === 'choices') throw httpError(409,'choose a drawing for each overlapping date before confirming');
+        if (result.error || result.claimed) throw httpError(409,result.error === 'changed' ? 'drawings changed. review the code again before confirming.' : 'this code has expired or its guest work has already been transferred.');
+        send(200,result); return;
+      }
       if (pathname.endsWith('/sign-out')) {
-        guestVisitor(req,res,!!process.env.VERCEL || [...config.origins][0].startsWith('https:'),true);
+        const guest = guestOwner(req);
+        const store = await getStore();
+        guestVisitor(req,res,!!process.env.VERCEL || [...config.origins][0].startsWith('https:'),guest ? await store.retired(guest) : false);
         send(200,{ok:true}); return;
       }
       const store = await getStore();
@@ -70,7 +105,8 @@ export function createAccountHandler({ getConfig = accountConfig, verify = verif
         const guest = guestOwner(req);
         if (pathname.endsWith('/link-guest')) {
           if (!guest) throw httpError(409, 'no guest identity remains in this browser. please reload your review');
-          const result = await store.link(account.id,guest,input.revision);
+          const result = await store.link(account.id,guest,input.revision,input.choices || {});
+          if (result.error === 'choices') throw httpError(409,'choose a drawing for each overlapping date before confirming');
           if (result.error === 'changed') throw httpError(409, 'your drawings changed. review the updated list before confirming again');
           if (result.error === 'claimed') throw httpError(409, 'this guest identity has already been linked to an account');
           send(200,result); return;

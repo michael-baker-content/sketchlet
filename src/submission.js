@@ -4,11 +4,11 @@ export function createSubmissionControls({ studio, editor, getState, isConnected
 const $ = selector => document.querySelector(selector);
 const captureDraft = day => editor.captureDraft(day);
 let reviewedDraft = null;
-const bar = document.createElement('div'); bar.className='submit-bar'; bar.innerHTML='<div class="submit-actions"><div class="save-buttons"><button class="web-button primary" id="review-drawing" disabled>save to gallery</button></div></div>'; studio.after(bar);
+const bar = document.createElement('div'); bar.className='submit-bar'; bar.innerHTML='<div class="submit-actions"><div class="save-buttons"><button class="web-button site-button primary" id="review-drawing" disabled>save to gallery</button></div></div>'; studio.after(bar);
 bar.hidden = true;
 // Keep the studio's existing PNG export handler when moving the download button.
 const downloadButton = $('#download');
-downloadButton.className = 'web-button';
+downloadButton.className = 'web-button site-button';
 downloadButton.textContent = 'download';
 downloadButton.setAttribute('aria-label', 'download drawing as PNG');
 downloadButton.hidden = false;
@@ -18,7 +18,7 @@ bar.querySelector('.save-buttons').append($('#save-status'));
 $('.download-note').hidden = true;
 const dialog = document.createElement('dialog'); dialog.className='submission-dialog';
 dialog.setAttribute('aria-labelledby', 'submission-heading');
-dialog.innerHTML='<form method="dialog"><h2>save to the gallery?</h2><p>your drawing will be visible to others and final for this prompt.</p><img alt="your drawing before submission"><p id="submission-error" role="alert"></p><div class="dialog-actions"><button class="web-button" value="cancel">keep drawing</button><button class="web-button primary" id="confirm-submit" type="button">save to gallery</button></div></form>';
+dialog.innerHTML='<form method="dialog"><h2>save to the gallery?</h2><p>your drawing will be visible to others and final for this prompt.</p><img alt="your drawing before submission"><p id="submission-error" role="alert"></p><div class="dialog-actions"><button class="web-button site-button utility" value="cancel">keep drawing</button><button class="web-button site-button danger primary" id="confirm-submit" type="button">save to gallery</button></div></form>';
 document.body.append(dialog);
 dialog.querySelector('h2').id = 'submission-heading';
 dialog.addEventListener('close', () => {

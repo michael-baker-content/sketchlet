@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <defs>
+    <pattern id="hatch" width="8" height="8" patternUnits="userSpaceOnUse"><path d="M1 7l5-5" fill="none" stroke="#584568" stroke-opacity=".17" stroke-width=".8"/></pattern>
+    <pattern id="grain" width="9" height="11" patternUnits="userSpaceOnUse"><path d="M2 3h1m3 5h.7" stroke="#584568" stroke-opacity=".23" stroke-width="1" stroke-linecap="round"/></pattern>
+    <path id="diamond" d="M0-21L9.5-12 21 0 12 9.5 0 21-9.5 10.5-21 0-11.5-9Z"/>
+  </defs>
+  <rect width="192" height="192" fill="#e5ddea"/>
+  <g transform="translate(-48 0)"><use href="#diamond" fill="#bcc9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(-48 192)"><use href="#diamond" fill="#bcc9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(0 0)"><use href="#diamond" fill="#b5a2c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(0 192)"><use href="#diamond" fill="#b5a2c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(48 0)"><use href="#diamond" fill="#c9b9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(48 192)"><use href="#diamond" fill="#c9b9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(96 0)"><use href="#diamond" fill="#9e8bb4" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(96 192)"><use href="#diamond" fill="#9e8bb4" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(144 0)"><use href="#diamond" fill="#bcc9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(144 192)"><use href="#diamond" fill="#bcc9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(192 0)"><use href="#diamond" fill="#b5a2c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(192 192)"><use href="#diamond" fill="#b5a2c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(-24 24)"><use href="#diamond" fill="#bba9c0" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(24 24)"><use href="#diamond" fill="#bcc9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(72 24)"><use href="#diamond" fill="#a3b6c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(120 24)"><use href="#diamond" fill="#cdd6df" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(168 24)"><use href="#diamond" fill="#bba9c0" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(216 24)"><use href="#diamond" fill="#bcc9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(-48 48)"><use href="#diamond" fill="#c9b9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(0 48)"><use href="#diamond" fill="#bba9c0" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(48 48)"><use href="#diamond" fill="#cdbdcf" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(96 48)"><use href="#diamond" fill="#b5a2c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(144 48)"><use href="#diamond" fill="#c9b9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(192 48)"><use href="#diamond" fill="#bba9c0" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(-24 72)"><use href="#diamond" fill="#a3b6c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(24 72)"><use href="#diamond" fill="#c9b9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(72 72)"><use href="#diamond" fill="#9e8bb4" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(120 72)"><use href="#diamond" fill="#bcc9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(168 72)"><use href="#diamond" fill="#a3b6c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(216 72)"><use href="#diamond" fill="#c9b9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(-48 96)"><use href="#diamond" fill="#cdbdcf" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(0 96)"><use href="#diamond" fill="#a3b6c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(48 96)"><use href="#diamond" fill="#cdd6df" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(96 96)"><use href="#diamond" fill="#bba9c0" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(144 96)"><use href="#diamond" fill="#cdbdcf" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(192 96)"><use href="#diamond" fill="#a3b6c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(-24 120)"><use href="#diamond" fill="#9e8bb4" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(24 120)"><use href="#diamond" fill="#cdbdcf" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(72 120)"><use href="#diamond" fill="#b5a2c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(120 120)"><use href="#diamond" fill="#c9b9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(168 120)"><use href="#diamond" fill="#9e8bb4" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(216 120)"><use href="#diamond" fill="#cdbdcf" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(-48 144)"><use href="#diamond" fill="#cdd6df" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(0 144)"><use href="#diamond" fill="#9e8bb4" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(48 144)"><use href="#diamond" fill="#bcc9d7" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(96 144)"><use href="#diamond" fill="#a3b6c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(144 144)"><use href="#diamond" fill="#cdd6df" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(192 144)"><use href="#diamond" fill="#9e8bb4" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(-24 168)"><use href="#diamond" fill="#b5a2c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(24 168)"><use href="#diamond" fill="#cdd6df" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(72 168)"><use href="#diamond" fill="#bba9c0" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+  <g transform="translate(120 168)"><use href="#diamond" fill="#cdbdcf" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#grain)"/></g>
+  <g transform="translate(168 168)"><use href="#diamond" fill="#b5a2c9" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/></g>
+  <g transform="translate(216 168)"><use href="#diamond" fill="#cdd6df" stroke="#887594" stroke-width=".85" stroke-linejoin="round"/><use href="#diamond" fill="url(#hatch)"/></g>
+</svg>

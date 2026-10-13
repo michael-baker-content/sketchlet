@@ -39,14 +39,33 @@ test('guest linking database transactions and concurrent writes', {
         (${external},${guest},2),(${external},${owner},4),(${move},${owner},3),(${move},${other},5),(${keep},${guest},5)`,
     ]);
     const preview = async g => (await one(sql`SELECT md5(sketchlet_guest_plan(${account},${g})::text) AS revision`))[0].revision;
-    const link = (a,g,r) => one(sql`SELECT sketchlet_link_guest(${a},${g},${r}) AS result`);
+    const link = (a,g,r,choices={}) => one(sql`SELECT sketchlet_link_guest(${a},${g},${r},${JSON.stringify(choices)}::jsonb) AS result`);
     const revision = await preview(guest);
+    await t.test('transfer codes expire, require current review, and can only be consumed by one account',async () => {
+      const transferGuest = 'e'.repeat(64), secret = 'f'.repeat(64);
+      await one(sql`INSERT INTO sketchlet_drawings(id,prompt_day,owner_hash,object_key) VALUES (${randomUUID()},'2000-01-03',${transferGuest},'transfer')`);
+      await one(sql`INSERT INTO sketchlet_guest_transfers(guest_hash,token_hash,expires_at) VALUES (${transferGuest},${secret},now()-interval '1 second')`);
+      const redeem = (a,r) => one(sql`SELECT sketchlet_redeem_transfer(${a},${secret},${r}) AS result`);
+      const plan = await preview(transferGuest);
+      assert.equal((await redeem(account,plan))[0].result.error,'expired');
+      await one(sql`UPDATE sketchlet_guest_transfers SET expires_at=now()+interval '15 minutes' WHERE guest_hash=${transferGuest}`);
+      assert.equal((await redeem(account,'0'.repeat(32)))[0].result.error,'changed');
+      assert.equal((await one(sql`SELECT account_id FROM sketchlet_guest_transfers WHERE guest_hash=${transferGuest}`))[0].account_id,null);
+      const result = (await redeem(account,plan))[0].result;
+      assert.equal(result.linked,1);
+      assert.deepEqual((await redeem(account,plan))[0].result,result);
+      assert.equal((await redeem(second,plan))[0].result.error,'expired');
+    });
     await t.test('outdated review writes nothing',async () => {
       assert.equal((await link(account,guest,'0'.repeat(32)))[0].result.error,'changed');
-      assert.equal((await one(sql`SELECT count(*)::int AS n FROM sketchlet_guest_links`))[0].n,0);
+      assert.equal((await one(sql`SELECT count(*)::int AS n FROM sketchlet_guest_links WHERE guest_hash=${guest}`))[0].n,0);
     });
     await t.test('links ownership, hides conflicts, preserves received ratings and reconciles self/duplicate votes',async () => {
-      assert.deepEqual((await link(account,guest,revision))[0].result,{linked:1,hidden:1,alreadyLinked:false});
+      for (const choices of [{},{[conflict]:external},{[conflict]:keep,[move]:move}]) {
+        assert.equal((await link(account,guest,revision,choices))[0].result.error,'choices');
+        assert.equal((await one(sql`SELECT count(*)::int AS n FROM sketchlet_guest_links WHERE guest_hash=${guest}`))[0].n,0);
+      }
+      assert.deepEqual((await link(account,guest,revision,{[conflict]:keep}))[0].result,{linked:1,hidden:1,alreadyLinked:false});
       const rows = await one(sql`SELECT id,owner_hash,object_key FROM sketchlet_drawings ORDER BY object_key`);
       assert.equal(rows.find(row=>row.id===move).owner_hash,owner);
       assert.equal(rows.find(row=>row.id===move).object_key,'move');
@@ -71,6 +90,34 @@ test('guest linking database transactions and concurrent writes', {
         sql`INSERT INTO sketchlet_votes(drawing_id,voter_hash,stars) VALUES (${external},${guest},1)`,
         sql`INSERT INTO sketchlet_votes(drawing_id,voter_hash,stars) VALUES (${move},${owner},1)`,
       ]) await assert.rejects(one(query));
+    });
+    await t.test('multiple sources can replace the same day while retaining tagged hidden drawings',async () => {
+      const waitingSource = '3'.repeat(64), waitingId = randomUUID();
+      await one(sql`INSERT INTO sketchlet_drawings(id,prompt_day,owner_hash,object_key) VALUES (${waitingId},'2000-01-01',${waitingSource},${waitingId})`);
+      const stale = await preview(waitingSource);
+      let previous = keep;
+      for (const source of ['1'.repeat(64),'2'.repeat(64)]) {
+        const incoming = randomUUID();
+        await one(sql`INSERT INTO sketchlet_drawings(id,prompt_day,owner_hash,object_key) VALUES (${incoming},'2000-01-01',${source},${incoming})`);
+        await one(sql`INSERT INTO sketchlet_votes(drawing_id,voter_hash,stars) VALUES (${incoming},${other},5),(${previous},${source},2)`);
+        const plan = await preview(source);
+        let result;
+        if (source.startsWith('2')) {
+          const secret = randomBytes(32).toString('hex');
+          await one(sql`INSERT INTO sketchlet_guest_transfers(guest_hash,token_hash,expires_at) VALUES (${source},${secret},now()+interval '15 minutes')`);
+          result = (await one(sql`SELECT sketchlet_redeem_transfer(${account},${secret},${plan},${JSON.stringify({[incoming]:incoming})}::jsonb) AS result`))[0].result;
+        } else result = (await link(account,source,plan,{[incoming]:incoming}))[0].result;
+        assert.deepEqual(result,{linked:1,hidden:1,alreadyLinked:false});
+        const [tag] = await one(sql`SELECT account_id,reason,selected_drawing_id,source_owner_hash FROM sketchlet_link_conflicts WHERE drawing_id=${previous}`);
+        assert.deepEqual(tag,{account_id:account,reason:'not selected during account merge',selected_drawing_id:incoming,source_owner_hash:owner});
+        assert.equal((await one(sql`SELECT count(*)::int AS n FROM sketchlet_public_drawings WHERE id=${previous}`))[0].n,0);
+        assert.equal((await one(sql`SELECT id FROM sketchlet_drawings WHERE owner_hash=${owner} AND prompt_day='2000-01-01'`))[0].id,incoming);
+        assert.equal((await one(sql`SELECT stars FROM sketchlet_votes WHERE drawing_id=${incoming} AND voter_hash=${other}`))[0].stars,5);
+        assert.equal((await one(sql`SELECT count(*)::int AS n FROM sketchlet_votes WHERE drawing_id=${previous} AND voter_hash IN (${source},${owner})`))[0].n,0);
+        previous = incoming;
+      }
+      assert.equal((await link(account,waitingSource,stale,{[waitingId]:keep}))[0].result.error,'changed');
+      assert.equal((await one(sql`SELECT owner_hash FROM sketchlet_drawings WHERE id=${waitingId}`))[0].owner_hash,waitingSource);
     });
     await t.test('a racing guest submission is either reviewed or rejected, never stranded after linking',async () => {
       const racingGuest = 'd'.repeat(64), raceId = randomUUID();

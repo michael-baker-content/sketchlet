@@ -60,6 +60,11 @@ export async function handlePublicPage(req, res, url, dependencies = {}) {
   try {
     const origin = dependencies.origin || publicOrigin();
     const path = url.pathname;
+    if (path === '/free-draw' || path === '/free-draw/' || path === '/free-draw.html') {
+      const html = renderPageShell('free-draw.html').replace(/<title>[\s\S]*?<\/title>/, socialTags({path:'/free-draw',title:'free draw — sketchlet',description:'Experiment with the drawing tools. Your canvas stays on this device.'}, origin));
+      res.writeHead(200, {'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});
+      res.end(req.method === 'HEAD' ? undefined : html); return;
+    }
     if (path === '/profile' || path === '/profile/' || path === '/profile.html') {
       res.writeHead(200, { 'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'private, no-store', 'X-Robots-Tag':'noindex, nofollow' });
       res.end(req.method === 'HEAD' ? undefined : renderPageShell('profile.html')); return;

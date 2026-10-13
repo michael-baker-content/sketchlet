@@ -30,7 +30,7 @@ async function start() {
           <p><button class="web-button site-button danger" type="submit">link guest work</button></p>
         </form>
       </section>
-      <p id="guest-link-help">While signed in, new drawings and ratings belong to your account. Existing guest work stays separate until you confirm linking. Unfinished drafts and profile photos stay on this device.</p>
+      <p id="guest-link-help">While signed in, new drawings and ratings belong to your account. Existing guest work stays separate until you confirm linking. Unfinished drafts stay on this device. Account photos sync privately; browser photos are uploaded only when you choose to save them to your account.</p>
     </div>`;
   mountProfilePhoto();
   const details = document.createElement('section');
@@ -45,7 +45,7 @@ async function start() {
   const transfer = document.createElement('section'); transfer.className = 'guest-transfer'; recoveryContent.append(transfer);
   let disposeTransfer = mountGuestTransfer(transfer);
   let disposeDetails = () => {};
-  function loadDetails(request) { disposeDetails(); disposeDetails = mountProfileDetails(details,request); return disposeDetails.ready; }
+  function loadDetails(request, account = false) { disposeDetails(); disposeDetails = mountProfileDetails(details,request,{account}); return disposeDetails.ready; }
   const status = document.querySelector('#account-status');
   const signIn = document.querySelector('#account-sign-in');
   const signOut = document.querySelector('#account-sign-out');
@@ -133,10 +133,10 @@ async function start() {
       await accountRequest('/api/account/register', clerk, {});
       if (current !== revision) return;
       rememberAccount(true);
-      const detailsReady = loadDetails((path,data) => accountRequest(path,clerk,data));
+      const detailsReady = loadDetails((path,data) => accountRequest(path,clerk,data),true);
       disposeTransfer();
       disposeTransfer = mountGuestTransfer(transfer,(path,data) => accountRequest(path,clerk,data),() => {
-        loadDetails((path,data) => accountRequest(path,clerk,data)); loadReview(current);
+        loadDetails((path,data) => accountRequest(path,clerk,data),true); loadReview(current);
       });
       notice('you’re signed in! your account is connected to sketchlet.', 'success');
       status.focus({ preventScroll:true });
@@ -166,7 +166,7 @@ async function start() {
       reviewStatus.classList.remove('terminal-output');
       reviewStatus.textContent = `${counted(result.linked,'drawing')} linked; ${counted(result.hidden,'drawing')} hidden. Your guest work is now connected to this account.`;
       planRevision = null;
-      loadDetails((path,data) => accountRequest(path,clerk,data));
+      loadDetails((path,data) => accountRequest(path,clerk,data),true);
     } catch (error) {
       if (current !== revision) return;
       // Never automatically repeat a potentially committed link request.

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { handleAvatar } from './avatar.mjs';
 import { guestVisitor } from './guest-identity.mjs';
 import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import sharp from 'sharp';
@@ -73,6 +74,9 @@ return async function handleApi(req, res, pathname) {
       await limit(owner);
     }
     const url = new URL(req.url, origin);
+    if (pathname === '/api/profile/avatar') {
+      await handleAvatar(req,res,{sql,storage,bucket,owner}); return;
+    }
     if (pathname === '/api/highlights' && req.method === 'GET') {
       const day = easternDate();
       const rows = await sql`SELECT d.id,d.prompt_day::text AS day,p.title,d.owner_hash,profile.display_name,

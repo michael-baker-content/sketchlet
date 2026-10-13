@@ -159,13 +159,16 @@ function showDrawing(drawing) {
   show(title(drawing.mine?'your drawing':drawing.prompt)+`<div class="submission-layout"><img class="finished-drawing" alt="${escape(drawing.prompt)}"><div class="submission-info"><h2>${escape(drawing.prompt)}</h2><p><time class="display-date">${escape(formatPromptDate(drawing.date))}</time></p><p class="rating-total">${escape(ratingText(drawing))}</p>${drawing.mine && today?`<div class="streak-box"><strong>${counted(state.streak, 'day')}</strong><span>drawing streak</span></div>`:''}<div class="drawing-actions"><button class="web-button site-button" id="copy-drawing-link" type="button">copy link</button><button class="web-button site-button" id="share-drawing-card" type="button">share card</button><button class="web-button site-button" id="start-rating">rate drawings</button></div><p class="muted share-status" id="share-status" role="status"></p>${!drawing.mine && drawing.myVote?`<p>your rating: ${drawing.myVote} / 5</p>`:''}</div></div>`);
   panel.querySelector('img').src=drawing.image;
   if (drawing.mine) {
+    const freeActions = document.createElement('div'); freeActions.className = 'free-draw-actions';
+    freeActions.setAttribute('role','group'); freeActions.setAttribute('aria-label','free draw options');
+    panel.querySelector('.drawing-actions').after(freeActions);
     const freeDraw = document.createElement('a'); freeDraw.className = 'web-button site-button';
     freeDraw.href = '/free-draw?start=blank'; freeDraw.textContent = 'free draw: blank canvas';
-    panel.querySelector('.drawing-actions').append(freeDraw);
+    freeActions.append(freeDraw);
     const continueDrawing = document.createElement('a'); continueDrawing.className = 'web-button site-button';
     continueDrawing.href = '/free-draw?drawing=' + encodeURIComponent(drawing.id);
     continueDrawing.textContent = 'free draw from this drawing';
-    panel.querySelector('.drawing-actions').append(continueDrawing);
+    freeActions.append(continueDrawing);
   }
   addReportButton(drawing,panel.querySelector('.drawing-actions'));
   panel.querySelector('.submission-info h2').insertAdjacentHTML('afterend', authorMarkup(drawing));

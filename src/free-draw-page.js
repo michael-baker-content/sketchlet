@@ -12,11 +12,12 @@ async function start() {
   $('.studio-title').textContent = 'free draw';
   const bar = document.createElement('div');
   bar.className = 'submit-bar';
-  bar.innerHTML = '<div class="submit-actions"><div class="save-buttons"></div></div><p class="reading-copy">Experiment with the tools. Your drawing saves on this device, separately from your daily drawing. Download it to keep a copy.</p><a href="/">back to today</a>';
+  bar.innerHTML = '<div class="submit-actions"><div class="save-buttons"><a class="web-button site-button free-draw-back" href="/">back to today</a></div></div><p class="reading-copy content-notice free-draw-guidance">Experiment with the tools. Your drawing saves on this device, separately from your daily drawing. Download it to keep a copy.</p>';
   const download = $('#download');
   download.className = 'web-button site-button'; download.textContent = 'download';
   download.setAttribute('aria-label','download drawing as PNG'); download.hidden = false;
-  bar.querySelector('.save-buttons').append(download, $('#save-status'));
+  bar.querySelector('.save-buttons').prepend(download);
+  bar.querySelector('.save-buttons').append($('#save-status'));
   $('.download-note').hidden = true;
   $('.studio').after(bar);
   await editor.setFreeDraw();

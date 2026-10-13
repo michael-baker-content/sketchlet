@@ -1,4 +1,5 @@
 import { formatPromptDate } from './prompts.js';
+import { accountHeaders } from './account-client.js';
 
 const photoKey = 'sketchlet.profilePhoto';
 function readPhoto() {
@@ -9,7 +10,23 @@ export function mountProfilePhoto() {
   const image = document.createElement('img');
   image.className = 'nav-profile-photo'; image.alt = 'your local profile photo'; image.width = image.height = 32;
   nav.append(image);
-  const update = () => { const photo = readPhoto(); image.hidden = !photo; if (photo) image.src = photo; else image.removeAttribute('src'); };
+  let revision = 0;
+  const update = async () => {
+    const current = ++revision;
+    image.hidden = true; image.removeAttribute('src');
+    try {
+      const headers = await accountHeaders();
+      let photo = readPhoto();
+      if (headers.Authorization) {
+        const response = await fetch('/api/profile/avatar',{headers,credentials:'same-origin',cache:'no-store'});
+        if (!response.ok) return;
+        photo = (await response.json()).photo;
+      }
+      if (current !== revision) return;
+      image.alt = 'your profile photo'; image.hidden = !photo;
+      if (photo) image.src = photo;
+    } catch { /* Expired sessions never fall back to another identity's photo. */ }
+  };
   image.onerror = () => { image.hidden = true; };
   window.addEventListener('storage', update);
   window.addEventListener('sketchlet:photo', update);
@@ -17,16 +34,17 @@ export function mountProfilePhoto() {
 }
 
 // A separate instance is mounted for each identity; disposal rejects late responses.
-export function mountProfileDetails(root, request) {
+export function mountProfileDetails(root, request, {account = false} = {}) {
   let active = true, busy = false, photoRevision = 0;
-  let savedPhoto = readPhoto(), pendingPhoto = savedPhoto;
+  let savedPhoto = account ? '' : readPhoto(), pendingPhoto = savedPhoto;
   root.innerHTML = `<div class="profile-editor"><h2>your profile</h2><form id="profile-edit-form">
     <label class="name-field">name (optional)<input id="profile-name" maxlength="32" autocomplete="nickname" disabled></label>
     <p>Your name appears on your drawings. Leave it blank to appear as anonymous.</p>
-    <div class="profile-photo"><img id="profile-photo-preview" alt="your local profile photo" hidden>
+    <div class="profile-photo"><img id="profile-photo-preview" alt="your profile photo" hidden>
     <label class="name-field">photo (optional)<input id="profile-photo-file" type="file" accept="image/jpeg,image/png,image/webp,image/gif"></label>
     <button type="button" class="web-button site-button danger" id="remove-profile-photo">remove photo</button>
-    <p>Your photo stays in this browser. It is not uploaded or visible to others.</p></div>
+    <button type="button" class="web-button site-button utility" id="use-local-photo" hidden>use this browser’s photo for my account</button>
+    <p>${account ? 'Your account photo syncs across your signed-in devices. Only you can see it; it is not shown on drawings, galleries, or to other users.' : 'Your photo stays in this browser. It is not uploaded or visible to others.'}</p></div>
     <p id="profile-edit-status" role="status">loading profile…</p>
     <button class="web-button site-button primary" id="save-name" disabled>save profile</button></form>
     <button class="web-button site-button utility" id="profile-load-retry" hidden>retry profile</button></div>
@@ -42,7 +60,13 @@ export function mountProfileDetails(root, request) {
   function controls(disabled) { for (const element of form.elements) element.disabled = disabled; }
   async function loadName() {
     $('#profile-load-retry').hidden = true;
-    try { const profile = await request('/api/profile'); if (!active) return; name.value = profile.displayName || ''; status.textContent = ''; controls(false); }
+    try {
+      const [profile, avatar] = await Promise.all([request('/api/profile'),account ? request('/api/profile/avatar') : null]);
+      if (!active) return;
+      if (account) { savedPhoto = pendingPhoto = avatar.photo || ''; showPhoto(); }
+      $('#use-local-photo').hidden = !account || !readPhoto();
+      name.value = profile.displayName || ''; status.textContent = ''; controls(false);
+    }
     catch (error) { if (active) { status.textContent = error.message; $('#profile-load-retry').hidden = false; } }
   }
   async function drawings() {
@@ -87,6 +111,10 @@ export function mountProfileDetails(root, request) {
     finally { URL.revokeObjectURL(url); busy = false; if (active) controls(false); }
   };
   remove.onclick = () => { pendingPhoto = ''; fileInput.value = ''; showPhoto(); status.textContent = 'save profile to remove your photo.'; };
+  $('#use-local-photo').onclick = () => {
+    pendingPhoto = readPhoto(); showPhoto();
+    status.textContent = 'browser photo selected — save profile to upload it to your account.';
+  };
   form.onsubmit = async event => {
     event.preventDefault(); if (busy) return; busy = true; controls(true);
     try {
@@ -95,8 +123,14 @@ export function mountProfileDetails(root, request) {
       name.value = profile.displayName;
       try { localStorage.setItem('sketchlet.displayName',profile.displayName); } catch {}
       if (pendingPhoto !== savedPhoto) {
-        try { if (pendingPhoto) localStorage.setItem(photoKey,pendingPhoto); else localStorage.removeItem(photoKey); }
-        catch { throw new Error('name saved, but the photo could not be saved in this browser.'); }
+        try {
+          if (account) {
+            const result = await request('/api/profile/avatar',{photo:pendingPhoto || null});
+            if (!active) return;
+            pendingPhoto = result.photo || ''; showPhoto();
+          } else if (pendingPhoto) localStorage.setItem(photoKey,pendingPhoto); else localStorage.removeItem(photoKey);
+        }
+        catch { throw new Error(account ? 'name saved, but the account photo could not be saved. please try again.' : 'name saved, but the photo could not be saved in this browser.'); }
         savedPhoto = pendingPhoto; window.dispatchEvent(new Event('sketchlet:photo'));
       }
       status.textContent = 'profile saved';

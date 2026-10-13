@@ -6,6 +6,7 @@ export function rememberAccount(value) {
   try { if (value) localStorage.setItem(accountHint,'1'); else localStorage.removeItem(accountHint); } catch {}
   // A non-authenticating hint also works when localStorage is unavailable.
   try { document.cookie = `sketchlet_account_hint=${value ? '1' : ''}; Path=/; SameSite=Lax; Max-Age=${value ? 31536000 : 0}${location.protocol === 'https:' ? '; Secure' : ''}`; } catch {}
+  window.dispatchEvent(new Event('sketchlet:photo'));
 }
 
 export async function accountHeaders() {

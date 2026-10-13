@@ -57,11 +57,11 @@ You can draw as a guest, remembered by a browser cookie. Optional Clerk accounts
 
 Your profile holds an optional display name and a preview of your five most recent drawings, with a link to **your gallery** for the full collection. Changing your name updates the attribution on earlier drawings too. Names aren't unique or verified; leaving yours blank displays “anonymous.” A name is required for rating.
 
-You can also add a profile photo for your own interface. It is resized and saved locally in your browser, never uploaded or shown to other visitors.
+You can also add a profile photo for your own interface. Guest photos stay in the browser. Account photos sync privately across signed-in devices and are never shown to other visitors. An existing browser photo is uploaded only after you select it for your account and save your profile.
 
 A few things to keep in mind:
 
-- Drafts and profile photos live on this device.
+- Drafts and guest profile photos live on this device; private account photos live in object storage.
 - Published drawings, names, and votes live on the server.
 - Clearing cookies or switching browsers or domains creates a different guest identity. Typing the same name does not reconnect your old drawings.
 - Old drafts stay separate, but there isn't an interface for reopening them yet.

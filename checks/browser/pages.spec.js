@@ -53,6 +53,7 @@ async function fixture(page, overrides = {}, { emptyDraft = false } = {}) {
       '/api/gallery': [drawing],
       ['/api/drawings/' + id]: drawing,
       '/api/profile': { displayName: 'tester' },
+      '/api/profile/avatar': { photo: null },
       '/api/profile/drawings': { drawings: [drawing], next: null },
       '/api/queue': [],
       '/api/admin/reports': { items:[],next:null },
@@ -122,6 +123,46 @@ test('a submitted image can seed free draw and survives clear, undo, and reload'
   await page.locator('#free-keep').click();
   expect(await readFree()).toEqual(original);
   expect(errors).toEqual([]);
+});
+
+test('account photo is private, requires explicit local import, and loads on another browser context', async ({page, browser}) => {
+  let photo = null, writes = 0;
+  async function setup(target) {
+    await fixture(target, {
+      '/api/account/config': route => route.fulfill({json:{enabled:true,publishableKey:'pk_test_fixture',frontendHost:'fixture.clerk.accounts.dev'}}),
+      '/api/account/register': route => route.fulfill({json:{ok:true}}),
+      '/api/account/guest-preview': route => route.fulfill({json:{drawings:[],revision:null}}),
+      '/api/profile/avatar': route => {
+        if (route.request().method() === 'POST') { photo = route.request().postDataJSON().photo; writes++; }
+        return route.fulfill({json:{photo}});
+      },
+      '/api/profile': route => route.fulfill({json:{displayName:'tester'}}),
+    });
+    await target.route('https://fixture.clerk.accounts.dev/**', route => route.fulfill({contentType:'text/javascript',body:route.request().url().includes('/ui@') ? 'window.__internal_ClerkUICtor = {};' : `window.Clerk={session:{id:'avatar-session',getToken:async()=> 'fixture'},load:async()=>{},addListener(){}};`}));
+  }
+  await setup(page);
+  await page.addInitScript(() => {
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 2;
+    localStorage.setItem('sketchlet.profilePhoto',canvas.toDataURL('image/jpeg'));
+  });
+  await page.goto('/profile');
+  await expect(page.locator('#use-local-photo')).toBeVisible();
+  await expect(page.locator('#profile-photo-preview')).toBeHidden();
+  expect(writes).toBe(0);
+  await page.locator('#use-local-photo').click();
+  expect(writes).toBe(0);
+  await page.locator('#save-name').click();
+  await expect(page.locator('#profile-edit-status')).toHaveText('profile saved');
+  expect(writes).toBe(1);
+  const context = await browser.newContext();
+  try {
+    const other = await context.newPage(); await setup(other); await other.goto('/profile');
+    await expect(other.locator('#profile-photo-preview')).toBeVisible();
+    await expect(other.locator('#use-local-photo')).toBeHidden();
+    await other.locator('#remove-profile-photo').click(); await other.locator('#save-name').click();
+    await expect(other.locator('#profile-edit-status')).toHaveText('profile saved');
+    expect(photo).toBeNull();
+  } finally { await context.close(); }
 });
 
 function expectNoEditor(requests) {

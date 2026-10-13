@@ -3,6 +3,36 @@ import { neon } from '@neondatabase/serverless';
 export function createAdminStore(databaseUrl) {
   const sql = neon(databaseUrl);
   return {
+    async announcements() {
+      return sql`SELECT id,title,body,description,slug,version,published_at,updated_at,
+        CASE WHEN status='scheduled' AND published_at<=now() THEN 'published' ELSE status END AS status
+        FROM sketchlet_announcements ORDER BY updated_at DESC,id DESC LIMIT 100`;
+    },
+    async saveAnnouncement(input,user) {
+      const [,rows] = await sql.transaction([
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${input.id},0))`,
+        sql`WITH previous AS MATERIALIZED (SELECT * FROM sketchlet_announcements WHERE id=${input.id}),
+        changed AS (
+          INSERT INTO sketchlet_announcements(id,title,body,description,slug,status,published_at)
+          SELECT ${input.id},${input.title},${input.body},${input.description},sketchlet_announcement_slug(${input.title},${input.id}::uuid),${input.status},
+            CASE WHEN ${input.status}='draft' THEN NULL WHEN ${input.status}='scheduled' THEN ${input.publishAt}::timestamptz ELSE now() END
+          WHERE ${input.version}=0
+          ON CONFLICT(id) DO NOTHING RETURNING *
+        ), edited AS (
+          UPDATE sketchlet_announcements SET title=${input.title},body=${input.body},description=${input.description},slug=coalesce(slug,sketchlet_announcement_slug(title,id)),status=${input.status},
+            published_at=CASE WHEN ${input.status}='draft' THEN NULL WHEN ${input.status}='scheduled' THEN ${input.publishAt}::timestamptz
+              WHEN published_at<=now() THEN published_at ELSE now() END,version=version+1,updated_at=now()
+          WHERE id=${input.id} AND version=${input.version} AND ${input.version}>0 RETURNING *
+        ), saved AS (SELECT * FROM changed UNION ALL SELECT * FROM edited),
+        audit AS (
+          INSERT INTO sketchlet_admin_actions(actor_github_id,actor_login,action,target_type,target_id,before_state,after_state)
+          SELECT ${user.id},${user.login},'announcement_saved','announcement',s.id::text,
+            (SELECT jsonb_build_object('status',p.status,'title',p.title,'version',p.version) FROM previous p),
+            jsonb_build_object('status',s.status,'title',s.title,'version',s.version,'published_at',s.published_at) FROM saved s
+        ) SELECT * FROM saved`,
+      ]);
+      return rows[0];
+    },
     async limit(key) {
       const [row] = await sql`INSERT INTO sketchlet_rate_limits(key_hash,window_start,request_count)
         VALUES (${key},now(),1) ON CONFLICT(key_hash) DO UPDATE SET
@@ -42,9 +72,11 @@ export function createAdminStore(databaseUrl) {
         INSERT INTO sketchlet_admin_actions(actor_github_id,actor_login,action,target_type)
         SELECT github_id,${user.login},'sign_out','admin_session' FROM removed`;
     },
-    async activity() {
+    async activity(before = null) {
       return sql`SELECT id::text,actor_login,action,target_type,target_id,before_state,after_state,private_note,created_at
-        FROM sketchlet_admin_actions ORDER BY created_at DESC,id DESC LIMIT 50`;
+        FROM sketchlet_admin_actions
+        WHERE (${before}::bigint IS NULL OR (created_at,id)<(SELECT created_at,id FROM sketchlet_admin_actions WHERE id=${before}::bigint))
+        ORDER BY created_at DESC,id DESC LIMIT 6`;
     },
     async submissions(before, filter) {
       return sql`SELECT d.id,d.prompt_day::text AS date,p.title AS prompt,profile.display_name,

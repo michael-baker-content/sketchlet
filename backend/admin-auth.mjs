@@ -1,6 +1,7 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { networkLimitKey } from './ratings.mjs';
 import { readJson } from './http.mjs';
+import { announcementInput } from './announcements.mjs';
 import { drawingIdPattern, moderationInput, moderationNote, drawingCursor, reviewCursor } from './moderation.mjs';
 const httpError = (status, message) => Object.assign(new Error(message), { status, adminSafe:true });
 
@@ -77,6 +78,8 @@ export function createAdminHandler({ getConfig = () => adminConfig(), getStore, 
         '/api/admin/logout':'POST', '/api/admin/activity':'GET', '/api/admin/drawings':'GET', '/api/admin/reports':'GET' };
       const drawingRoute = pathname.match(/^\/api\/admin\/drawings\/([^/]+)\/(image|moderate)$/);
       const reportRoute = pathname.match(/^\/api\/admin\/reports\/([1-9]\d{0,18})\/resolve$/);
+      routes['/api/admin/announcements'] = 'GET';
+      routes['/api/admin/announcements/save'] = 'POST';
       if (drawingRoute && drawingIdPattern.test(drawingRoute[1])) routes[pathname] = drawingRoute[2] === 'image' ? 'GET' : 'POST';
       if (reportRoute) routes[pathname] = 'POST';
       if (!Object.hasOwn(routes, pathname)) throw httpError(404, 'not found');
@@ -131,6 +134,14 @@ export function createAdminHandler({ getConfig = () => adminConfig(), getStore, 
       const validate = run => { try { return run(); } catch (error) { throw httpError(400,error.message); } };
       const inputBody = async () => { try { return await readJson(req); } catch (error) { throw httpError(error.status || 400,'invalid moderation request'); } };
       const url = new URL(req.url, config.origin);
+      if (pathname === '/api/admin/announcements') return json(res,200,{items:await store.announcements()});
+      if (pathname === '/api/admin/announcements/save') {
+        const raw = await inputBody();
+        const input = validate(() => announcementInput(raw));
+        const saved = await store.saveAnnouncement(input,session.user);
+        if (!saved) throw httpError(409,'this announcement changed or was already saved. reload the list before editing again.');
+        return json(res,200,{item:saved});
+      }
       if (pathname === '/api/admin/drawings' || pathname === '/api/admin/reports') {
         const isDrawings = pathname.endsWith('/drawings');
         const filter = url.searchParams.get('filter') || (isDrawings ? 'all' : 'open');
@@ -164,7 +175,11 @@ export function createAdminHandler({ getConfig = () => adminConfig(), getStore, 
       if (pathname === '/api/admin/status') return json(res, 200, {
         configured:true, authenticated:true, login:session.user.login, csrf:session.csrf, expiresAt:session.user.expires_at,
       });
-      if (pathname === '/api/admin/activity') return json(res, 200, { actions:await store.activity() });
+      if (pathname === '/api/admin/activity') {
+        const before = validate(() => reviewCursor(url.searchParams.get('before')));
+        const rows = await store.activity(before);
+        return json(res, 200, { actions:rows.slice(0,5), next:rows.length>5 ? rows[4].id : null });
+      }
       if (pathname === '/api/admin/logout') {
         await store.logout(session.tokenHash, session.user);
         setCookie(res, config, 'session', '', 0);

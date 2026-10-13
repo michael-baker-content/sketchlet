@@ -5,6 +5,7 @@ import { formatPromptDate } from '../src/prompts.js';
 import { drawingCaption } from '../src/text-format.js';
 import { renderPageShell } from './page-shell.mjs';
 import { informationPage } from './information-pages.mjs';
+import { announcementMarkup, announcementPath } from '../src/announcement-format.js';
 
 const escape = value => String(value).replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]));
 const dateValid = value => /^\d{4}-\d{2}-\d{2}$/.test(value || '') && Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
@@ -49,6 +50,7 @@ export function socialImage() {
 }
 
 const defaults = {
+  announcements: async () => (await import('./social-data.mjs')).socialAnnouncements(),
   drawing: async id => (await import('./social-data.mjs')).socialDrawing(id),
   prompt: async date => (await import('./social-data.mjs')).socialPrompt(date),
   html: renderPageShell,
@@ -72,7 +74,13 @@ export async function handlePublicPage(req, res, url, dependencies = {}) {
     const information = informationPage(path);
     if (information) {
       const slug = path.replace(/^\//, '').replace(/\/$/, '').replace(/\.html$/, '');
-      const html = renderPageShell(`${slug}.html`).replace(/<title>[\s\S]*?<\/title>/, socialTags({ path:`/${slug}`, title:`${information.label} — sketchlet`, description:information.draft === false ? 'Send Michael a note about sketchlet.' : 'A draft information page for sketchlet.' }, origin));
+      let html = renderPageShell(`${slug}.html`).replace(/<title>[\s\S]*?<\/title>/, socialTags({ path:`/${slug}`, title:`${information.label} — sketchlet`, description:information.description || (information.draft === false ? 'Send Michael a note about sketchlet.' : 'A draft information page for sketchlet.') }, origin));
+      if (slug === 'info') {
+        let announcements;
+        try { announcements = announcementMarkup(await deps.announcements()); }
+        catch { announcements = '<p>Announcements are temporarily unavailable. Please try again later.</p>'; }
+        html = html.replace('<!-- announcements -->',announcements);
+      }
       res.writeHead(200, { 'Content-Type':'text/html; charset=utf-8', 'Cache-Control':'no-store', ...(information.draft === false ? {} : { 'X-Robots-Tag':'noindex, nofollow' }) });
       res.end(req.method === 'HEAD' ? undefined : html); return;
     }
@@ -123,9 +131,15 @@ export async function handlePublicPage(req, res, url, dependencies = {}) {
     } else if (path !== '/') {
       throw Object.assign(new Error('not found'), { status: 404 });
     }
-    const html = await deps.html(path === '/' ? 'index.html' : 'gallery.html');
+    let html = await deps.html(path === '/' ? 'index.html' : 'gallery.html');
+    if (path === '/') {
+      try {
+        const [latest] = await deps.announcements();
+        if (latest) html = html.replace('</main>',`<aside class="home-announcement" aria-label="latest announcement"><div class="panel-title"><h2>from Michael</h2><span aria-hidden="true">✉</span></div><div class="home-announcement-body reading-copy"><p class="home-announcement-label">Latest site news</p><a href="${escape(announcementPath(latest))}">${escape(latest.title)}</a>${latest.description ? `<p>${escape(latest.description)}</p>` : ''}</div></aside></main>`);
+      } catch { /* Announcements never block the daily page. */ }
+    }
     const body = html.replace(/<title>[\s\S]*?<\/title>/, socialTags(meta, origin));
-    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': id ? 'private, no-store' : 'public, max-age=0, s-maxage=300' });
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': id ? 'private, no-store' : path === '/' ? 'no-store' : 'public, max-age=0, s-maxage=300' });
     res.end(req.method === 'HEAD' ? undefined : body);
   } catch (error) {
     const status = error.status === 404 ? 404 : 503;

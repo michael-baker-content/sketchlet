@@ -6,10 +6,23 @@ import { adminConfig, createAdminHandler, githubIdentity } from '../backend/admi
 const env = { ADMIN_ORIGIN:'https://sketchlet.example', ADMIN_GITHUB_ID:'123', GITHUB_CLIENT_ID:'client', GITHUB_CLIENT_SECRET:'secret', DATABASE_URL:'unused' };
 const config = adminConfig(env);
 const hash = value => createHash('sha256').update(value).digest('hex');
+
+test('admin activity returns five entries and validates the older-entry cursor',async()=>{
+  const f=fixture();const {cookie}=await f.authenticate();
+  const rows=Array.from({length:8},(_,i)=>({id:String(8-i)}));
+  f.store.activity=async before=>rows.filter(row=>!before || BigInt(row.id)<BigInt(before)).slice(0,6);
+  const first=await f.request('/api/admin/activity',{cookies:cookie});
+  assert.equal(first.json.actions.length,5);assert.equal(first.json.next,'4');
+  const second=await f.request('/api/admin/activity?before=4',{cookies:cookie});
+  assert.deepEqual(second.json.actions.map(row=>row.id),['3','2','1']);assert.equal(second.json.next,null);
+  assert.equal((await f.request('/api/admin/activity?before=bad',{cookies:cookie})).status,400);
+});
 function fixture({ configured = true, account = '123' } = {}) {
   const states = new Map(), sessions = new Map(), actions = [], moderationCalls = [];
   let identityCalls = 0, allowLogin = true, activityReads = 0;
   const store = {
+    announcements:async () => [],
+    saveAnnouncement:async (input,user) => {moderationCalls.push(['announcement',input,user]);return {...input,version:input.version+1};},
     limit:async () => allowLogin,
     saveState:async (key, verifier, previous) => { states.delete(previous); states.set(key, { verifier }); },
     consumeState:async key => { const value = states.get(key); states.delete(key); return value; },
@@ -179,6 +192,22 @@ test('moderation reads, private images, and writes reject guest sessions before 
   }
   assert.equal((await f.request(`/api/admin/drawings/${id}/moderate`, { method:'POST',body:{ action:'hide',reason:'spam' } })).status,401);
   assert.deepEqual(f.moderationCalls,[]);
+});
+
+test('announcements require administrator session, CSRF, valid scheduling, and current revision', async () => {
+  const f=fixture(), path='/api/admin/announcements/save';
+  const body={id:'12345678-1234-1234-1234-123456789abc',version:0,title:'Hello',body:'A note',status:'draft'};
+  assert.equal((await f.request('/api/admin/announcements')).status,401);
+  assert.equal((await f.request(path,{method:'POST',body})).status,401);
+  const {cookie}=await f.authenticate();
+  const {csrf}=(await f.request('/api/admin/status',{cookies:cookie})).json;
+  const options={method:'POST',cookies:cookie,headers:{'x-csrf-token':csrf}};
+  assert.equal((await f.request(path,{...options,headers:{},body})).status,403);
+  assert.equal((await f.request(path,{...options,body:{...body,status:'scheduled',publishAt:'2000-01-01'}})).status,400);
+  assert.equal((await f.request(path,{...options,body})).status,200);
+  assert.equal(f.moderationCalls.at(-1)[2].id,'123');
+  f.store.saveAnnouncement=async()=>null;
+  assert.equal((await f.request(path,{...options,body})).status,409);
 });
 
 test('moderation validates CSRF and input, records the admin identity, and keeps report resolution separate', async () => {

@@ -1,8 +1,9 @@
 import { revealPage, startupError } from './page-startup.js';
 import { mountModeration } from './admin-moderation.js';
+import { mountAnnouncements } from './admin-announcements.js';
 
 const panel = document.querySelector('#page-content');
-let session;
+let session, activityNext = null, activityRevision = 0;
 async function request(path, { method = 'GET', body } = {}) {
   const response = await fetch('/api/admin/' + path, { method, credentials:'same-origin', cache:'no-store',
     headers:method === 'POST' ? { 'X-CSRF-Token':session.csrf, 'Content-Type':'application/json' } : {},
@@ -27,7 +28,7 @@ function decisionState(label, state) {
   const title = document.createElement('strong'); title.className = 'admin-decision-label'; title.textContent = label;
   section.append(title);
   const fields = document.createElement('dl');
-  for (const [key, name] of [['status','visibility / review status'],['reason','removal reason'],['name','display name']]) {
+  for (const [key, name] of [['status','visibility / review status'],['reason','removal reason'],['name','display name'],['title','title'],['version','revision'],['published_at','publication time']]) {
     if (!state || !Object.hasOwn(state,key)) continue;
     const term = document.createElement('dt'), value = document.createElement('dd');
     term.textContent = name;
@@ -39,15 +40,18 @@ function decisionState(label, state) {
   else { const empty = document.createElement('p'); empty.textContent = 'not recorded'; section.append(empty); }
   return section;
 }
-async function loadActivity() {
+async function loadActivity(before = null) {
   const status = document.querySelector('#admin-activity-status');
   const list = document.querySelector('#admin-activity');
   if (!status || !list) return;
+  const more = document.querySelector('#admin-activity-more');
+  const revision = ++activityRevision;
+  more.disabled = true;
   status.textContent = 'loading activity…';
   try {
-    const { actions } = await request('activity');
-    if (!list.isConnected) return;
-    list.replaceChildren();
+    const { actions, next } = await request('activity' + (before ? '?before=' + encodeURIComponent(before) : ''));
+    if (!list.isConnected || revision !== activityRevision) return;
+    if (!before) list.replaceChildren();
     for (const action of actions) {
       const item = document.createElement('li');
       const time = document.createElement('time');
@@ -77,11 +81,13 @@ async function loadActivity() {
       }
       list.append(item);
     }
-    status.textContent = actions.length ? 'most recent activity (up to 50 entries).' : 'no activity yet.';
+    activityNext = next || null; more.hidden = !activityNext;
+    status.textContent = list.children.length ? `showing ${list.children.length} recent entries${activityNext ? '.' : ' — no more activity.'}` : 'no activity yet.';
   } catch (error) {
+    if (!list.isConnected || revision !== activityRevision) return;
     if (error.status === 401) { signedOut(true, 'your session has expired. please sign in again.'); return; }
     status.textContent = error.message;
-  }
+  } finally { if (more.isConnected && revision === activityRevision) more.disabled = false; }
 }
 async function start() {
   const failed = new URLSearchParams(location.search).get('auth') === 'failed';
@@ -93,8 +99,15 @@ async function start() {
   }
   content('<div class="admin-content"><div class="admin-account"><p id="admin-account-name"></p><button class="web-button site-button utility" id="admin-logout">sign out</button></div><p id="admin-error" role="alert"></p><section aria-labelledby="admin-activity-heading"><h2 id="admin-activity-heading">recent activity</h2><p id="admin-activity-status" role="status"></p><ol id="admin-activity"></ol><button class="web-button site-button utility" id="admin-refresh">refresh activity</button></section></div>');
   document.querySelector('#admin-account-name').textContent = `signed in as ${session.login}`;
+  const activityMore = document.createElement('button');
+  activityMore.id = 'admin-activity-more'; activityMore.className = 'web-button site-button utility';
+  activityMore.textContent = 'load more'; activityMore.hidden = true;
+  activityMore.onclick = () => loadActivity(activityNext);
+  document.querySelector('#admin-refresh').after(activityMore);
   const moderation = document.createElement('section'); moderation.setAttribute('aria-labelledby','moderation-heading');
   document.querySelector('#admin-error').after(moderation);
+  const announcements = document.createElement('section'); announcements.setAttribute('aria-labelledby','announcements-admin-heading');
+  moderation.after(announcements);
   document.querySelector('#admin-refresh').onclick = async event => {
     const button = event.currentTarget; button.disabled = true;
     try { await loadActivity(); } finally { button.disabled = false; }
@@ -107,7 +120,12 @@ async function start() {
       else { document.querySelector('#admin-error').textContent = error.message; button.disabled = false; }
     }
   };
-  await Promise.all([loadActivity(), mountModeration(moderation, { request,
+  await Promise.all([loadActivity(), mountAnnouncements(announcements,{request,onExpired:()=>signedOut(true,'your session has expired. please sign in again.'),onSaved:loadActivity}).catch(() => {
+    if (!announcements.isConnected) return;
+    const message = document.createElement('p'); message.setAttribute('role','alert');
+    message.textContent = 'the announcement editor could not load. reload the page to try again.';
+    announcements.replaceChildren(message);
+  }), mountModeration(moderation, { request,
     onExpired:() => signedOut(true,'your session has expired. please sign in again.'), onSaved:loadActivity })]);
   await revealPage();
 }

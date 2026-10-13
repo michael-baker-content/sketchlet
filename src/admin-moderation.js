@@ -22,23 +22,33 @@ export function mountModeration(root, { request, onExpired, onSaved }) {
       const result = await request(`${kind.value}?filter=${filter.value}${before ? '&before=' + encodeURIComponent(before) : ''}`);
       if (version !== revision || !root.isConnected) return;
       for (const item of result.items) {
-        const card = document.createElement('article'); card.className = 'admin-review-card';
+        const card = document.createElement('details'); card.className = 'admin-review-card';
         const id = item.drawing_id || item.id;
-        const image = document.createElement('img'); image.src = `/api/admin/drawings/${id}/image`;
+        const summary = document.createElement('summary');
+        const content = document.createElement('div'); content.className = 'admin-review-details';
+        const image = document.createElement('img');
         image.alt = item.prompt; image.loading = 'lazy'; image.width = image.height = 160;
-        const heading = document.createElement('h3'); heading.textContent = item.prompt;
-        const details = document.createElement('p');
+        // Collapsed queue rows must not fetch or reveal potentially sensitive artwork.
+        card.addEventListener('toggle',() => {
+          if (card.open && !image.hasAttribute('src')) image.src = `/api/admin/drawings/${id}/image`;
+        });
+        const heading = document.createElement('strong'); heading.textContent = item.prompt;
+        const details = document.createElement('span'); details.className = 'admin-review-meta';
         details.textContent = `${item.date} · ${item.display_name || 'anonymous'} · ${item.drawing_status || item.status}`;
-        card.append(image,heading,details);
+        summary.append(heading,details);
+        content.append(image);
         if (item.category) {
-          const reason = document.createElement('p'); reason.textContent = `report: ${reportReasons[item.category] || item.category}`;
+          const reason = document.createElement('span'); reason.className = 'admin-review-meta'; reason.textContent = `${item.status} report: ${reportReasons[item.category] || item.category}`;
           const explanation = document.createElement('p'); explanation.className = 'report-explanation'; explanation.textContent = item.explanation || 'no additional explanation.';
-          card.append(reason,explanation);
+          summary.append(reason); content.append(explanation);
         } else {
-          const count = document.createElement('p'); count.textContent = `open reports: ${item.reports}`; card.append(count);
+          const count = document.createElement('span'); count.className = 'admin-review-meta'; count.textContent = `open reports: ${item.reports}`; summary.append(count);
         }
+        for (const field of summary.children) field.title = field.textContent;
+        const identifier = document.createElement('p'); identifier.textContent = `drawing ID: ${id}`; content.append(identifier);
+        if (item.reason) { const reason = document.createElement('p'); reason.textContent = `removal reason: ${removalReasons[item.reason] || item.reason}`; content.append(reason); }
         const button = document.createElement('button'); button.className = 'web-button site-button'; button.textContent = 'review drawing';
-        button.onclick = () => review(item,button); card.append(button); list.append(card);
+        button.onclick = () => review(item,button); content.append(button); card.append(summary,content); list.append(card);
       }
       next = result.next; more.hidden = !next;
       status.textContent = list.children.length ? '' : 'nothing to review here.';

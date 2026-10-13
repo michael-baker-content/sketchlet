@@ -14,6 +14,10 @@ let navigationAddress = pageAddress();
 let studio = $('.studio'), intro = $('.intro');
 let editorUI = null;
 const panel = $('#page-content');
+const homeAnnouncement = $('.home-announcement');
+function parkAnnouncement() {
+  if (homeAnnouncement && panel.contains(homeAnnouncement)) panel.after(homeAnnouncement);
+}
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let state = today || { date: easternDate(), prompt: promptForDate(easternDate()), submission: null, streak: 0 };
 const connected = !!today;
@@ -99,6 +103,7 @@ async function adoptDay(next) {
 }
 header();
 function show(content) {
+  parkAnnouncement();
   disposeHighlights(); disposeHighlights = () => {};
   if (intro) intro.hidden = true;
   hideEditor(); panel.hidden = false; panel.innerHTML = content;
@@ -117,6 +122,7 @@ function errorScreen(error) {
   wireHome();
 }
 function showLoading(label) {
+  parkAnnouncement();
   if (intro) intro.hidden = true;
   hideEditor();
   panel.hidden = false;
@@ -348,8 +354,15 @@ async function load() {
       const dayPanel = document.createElement('section'); dayPanel.className = 'welcome-day'; dayPanel.setAttribute('aria-labelledby','page-heading');
       dayPanel.append(...panel.childNodes);
       const highlights = document.createElement('section'); highlights.className = 'home-highlights'; highlights.setAttribute('aria-labelledby','highlights-heading');
-      highlights.innerHTML = '<div class="panel-title"><h2 id="highlights-heading">recent favorites</h2></div><p class="highlights-description reading-copy">From the past 14 days: four stars or higher, with at least two ratings.</p><div class="highlights-grid"></div><p class="highlights-status" role="status">loading recent favorites…</p><button class="web-button site-button utility" hidden>try again</button>';
-      columns.append(dayPanel,highlights); panel.append(columns);
+      highlights.innerHTML = '<div class="panel-title"><h2 id="highlights-heading">recent favorites</h2></div><p class="highlights-description reading-copy">Explore more drawings and rate your favorites in the <a href="/gallery">gallery</a>.</p><div class="highlights-grid"></div><p class="highlights-status" role="status">loading recent favorites…</p><button class="web-button site-button utility" hidden>try again</button>';
+      const dayColumn = document.createElement('div'); dayColumn.className = 'welcome-day-column';
+      dayColumn.append(dayPanel);
+      if (homeAnnouncement) dayColumn.append(homeAnnouncement);
+      const pretendAd = document.createElement('aside'); pretendAd.className = 'pretend-ad';
+      pretendAd.setAttribute('aria-label','sketchlet account promotion');
+      pretendAd.innerHTML = `<p class="pretend-ad-label">a word from our sponsor: us.</p><div class="pretend-ad-content"><svg viewBox="0 0 64 64" aria-hidden="true" focusable="false" shape-rendering="crispEdges"><path fill="#51405f" d="M8 34h8v-8h8v-8h8v-8h16v8h8v24h-8v8h-8v8H16v-8H8z"/><path fill="#d49ebc" d="M16 34h8v-8h8v-8h12v8h8v12h-8v8H28v-8H16z"/><path fill="#f4e6bb" d="M16 38h8v8h16v4H20v-4h-4z"/><path fill="#fff7df" d="M4 8h4v4h4v4H8v4H4v-4H0v-4h4zm48 44h4v4h4v4h-4v4h-4v-4h-4v-4h4z"/></svg><div><h2>stay awhile!</h2><p class="pretend-ad-tagline">your doodles.<br>more places.</p><p class="pretend-ad-copy">Sign in to keep your submitted drawings together across devices.</p></div></div><a class="pretend-ad-link" href="/profile">sign in or visit your profile →</a><p class="pretend-ad-fineprint">free to join. guest drawing is always welcome.</p>`;
+      dayColumn.append(pretendAd);
+      columns.append(dayColumn,highlights); panel.append(columns);
       import('./home-highlights.js').then(({mountHomeHighlights}) => {
         if (generation === viewGeneration && highlights.isConnected) disposeHighlights = mountHomeHighlights(highlights,api);
       }).catch(() => { if (highlights.isConnected) highlights.querySelector('[role=status]').textContent = 'recent favorites are unavailable.'; });
@@ -369,6 +382,7 @@ async function load() {
       };
       return;
     }
+    parkAnnouncement();
     intro.hidden=false; panel.hidden=true; studio.hidden=false; editorUI.bar.hidden=false;
     editor.showDraftStatus();
     document.title='sketchlet - a little drawing every day';

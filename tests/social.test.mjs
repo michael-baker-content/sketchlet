@@ -24,6 +24,30 @@ test('free draw serves its own shell without drawing queries', async () => {
   assert.doesNotMatch(result.body,/src\/home-page.js|src\/gallery-page.js/);
 });
 
+test('info is a published guide with its own metadata and no database dependency', async () => {
+  const result = await response('/info', {drawing:() => assert.fail('no database'),prompt:() => assert.fail('no database')});
+  assert.equal(result.status,200);
+  assert.match(result.body,/Drawing guides, free draw/);
+  assert.match(result.body,/id="drawing-guide"/);
+  assert.match(result.body,/id="announcements"/);
+  assert.doesNotMatch(result.body,/Draft for review|noindex/);
+});
+
+test('published announcements render on Info and latest home preview with safe content', async () => {
+  const announcements=async()=>[{id,slug:'new-tools~EjRWeBI0EjQSNBI0VniavA',title:'<b>New tools</b>',description:'Try <new> tools & ideas.',body:'**Try them**\n\n- Have fun',published_at:'2026-10-12T12:00:00Z'}];
+  const info=await response('/info',{announcements});
+  assert.match(info.body,/&lt;b&gt;New tools&lt;\/b&gt;/);
+  assert.match(info.body,/<strong>Try them<\/strong>/);
+  const home=await response('/',{announcements});
+  assert.match(home.body,/latest announcement/);
+  assert.match(home.body,/Try &lt;new&gt; tools &amp; ideas\./);
+  assert.match(home.body,/href="\/info#new-tools~EjRWeBI0EjQSNBI0VniavA"/);
+  assert.equal(home.headers['Cache-Control'],'no-store');
+  const failed=await response('/',{announcements:async()=>{throw new Error('offline');}});
+  assert.equal(failed.status,200);
+  assert.doesNotMatch(failed.body,/class="home-announcement/);
+});
+
 test('account preview serves a private shell without loading guest or drawing data', async () => {
   const result = await response('/profile', {
     drawing:() => assert.fail('no drawing query'), prompt:() => assert.fail('no prompt query'),
@@ -45,7 +69,10 @@ test('information drafts are readable without JavaScript, cookies, or database a
       assert.match(result.body, /Draft for review/);
       assert.match(result.body, /<h2>/);
       assert.match(result.body, new RegExp(`href="/${slug}" aria-current="page"`));
-      assert.doesNotMatch(result.body, /<script|<canvas|please enable javascript|class="empty-state"/);
+      // Decoration is progressive enhancement; content must not need an app loader.
+      assert.deepEqual([...result.body.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/g)].map(match => match[0]),
+        ['<script type="module" src="/src/page-background.js"></script>']);
+      assert.doesNotMatch(result.body, /<canvas|please enable javascript|class="empty-state"/);
     }
     const head = await response(`/${slug}`, {}, 'HEAD');
     assert.equal(head.status, 200);
@@ -59,6 +86,7 @@ async function response(path, overrides = {}, method = 'GET') {
     end(body) { result.body = body; },
   }, new URL(path, origin), {
     origin,
+    announcements: async () => [],
     drawing: async found => found === id ? row : null,
     prompt: async date => date === row.date ? { ...row, count: 3 } : null,
     artwork: () => assert.fail('link previews must never fetch artwork'),
@@ -89,7 +117,8 @@ test('home and gallery serve social metadata without cookies or database access'
     if (path === '/') assert.match(result.body, /<title>sketchlet - a little drawing every day<\/title>/);
     assert.match(result.body, path === '/' ? /src\/home-page.js/ : /src\/gallery-page.js/);
     assert.doesNotMatch(result.body, path === '/' ? /src\/gallery-page.js/ : /src\/home-page.js/);
-    assert.equal((result.body.match(/<script type="module"/g) || []).length, 1);
+    assert.deepEqual([...result.body.matchAll(/<script type="module" src="([^"]+)"/g)].map(match => match[1]),
+      ['/src/page-background.js',path === '/' ? '/src/home-page.js' : '/src/gallery-page.js']);
     assert.equal((result.body.match(/id="page-loader"/g) || []).length, 1);
     assert.doesNotMatch(result.body, /\$\{page\./);
     assert.doesNotMatch(result.body, /<canvas|src="\/src\/studio.js"/);

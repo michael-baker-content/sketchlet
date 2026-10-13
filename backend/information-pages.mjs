@@ -1,6 +1,29 @@
 import { contactForm } from './contact-form.mjs';
+import { infoHero } from './info-hero.mjs';
 // Editorial drafts: update docs/PUBLIC-PAGES.md before removing the draft notice.
 export const informationPages = new Map([
+  ['info', {label:'info',draft:false,description:'Drawing guides, free draw, and updates from sketchlet.',content:`
+    <p>A place to explore the tools, find answers, and catch up on sketchlet.</p>
+    ${infoHero}
+    <section id="practice"><h2>room to experiment</h2>
+      <p>Try the tools on a canvas of your own. Free draw saves on this device and stays separate from the daily prompt. Download your experiments to keep a copy.</p>
+      <p><a class="web-button site-button info-button" href="/free-draw">open free draw</a></p>
+      <p>To start from one of your submitted images, open it in <a href="/gallery?view=mine">your gallery</a> and choose “free draw from this drawing.” The gallery original stays unchanged.</p>
+    </section>
+    <section id="drawing-guide"><h2>get to know the tools</h2>
+      <dl class="tool-guide">
+        <dt>brush &amp; marker</dt><dd>Start with brush for solid marks. Marker adds a translucent layer for softer color.</dd>
+        <dt>pencil &amp; spray</dt><dd>Pencil builds a grainy texture with repeated strokes. Spray scatters small dots; build up coverage gradually.</dd>
+        <dt>line</dt><dd>Press where the line should start, drag to its endpoint, and release. Lines use a solid stroke with the selected size and shape.</dd>
+        <dt>fill</dt><dd>Tap a connected area to fill it with your selected color. Gaps in a boundary let the color through. Undo reverses the whole fill.</dd>
+        <dt>dashed &amp; dotted</dt><dd>Draw a trail of separated marks. Try different sizes and shapes to change the rhythm.</dd>
+        <dt>shape, size &amp; erase</dt><dd>Choose circle, square, or rough shapes and fine, mid, or bold sizes. Switch to erase to remove marks. For spray, shape controls the dots.</dd>
+      </dl>
+      <div class="content-notice"><strong>Drawing with your finger?</strong><p>Your mark appears a little above your finger so you can see it. The strip below the canvas lets you reach the bottom edge. Full-screen mode makes more room when your screen supports it.</p></div>
+      <p>Undo and redo let you revisit changes during a session. Clearing the canvas can also be undone. Download saves a PNG; “save to gallery” publishes your daily drawing and is final.</p>
+    </section>
+    <section id="announcements" class="announcement-board" aria-labelledby="announcements-heading"><div class="announcement-board-header"><h2 id="announcements-heading" class="announcements-masthead"><span aria-hidden="true">✉</span> from Michael</h2><p>Site news &amp; notes from the creator of sketchlet.</p></div><div class="announcement-board-messages"><!-- announcements --></div></section>
+    <section id="site-information"><h2>about the site</h2><p>Read <a href="/about">about sketchlet</a>, the <a href="/privacy">privacy draft</a>, and the <a href="/community">community &amp; terms draft</a>. Have a question or suggestion? <a href="/contact">Send Michael a note</a>.</p></section>`}],
   ['about', { label:'about', content:`
     <p>sketchlet is a little drawing every day, a personal project by Michael Baker. A small creative break, whether you make a quick doodle or spend time on the details.</p>
     <h2>one prompt, lots of interpretations</h2>
@@ -26,6 +49,7 @@ export const informationPages = new Map([
     <h2>operating the site</h2>
     <p>sketchlet uses guest and hashed network identifiers to limit repeated requests and abuse. It uses Vercel for hosting and Neon for database and image storage. The site requests its font from Google Fonts. Those services receive information needed to handle requests, which can include network and browser information.</p>
     <p>Administrator sign-in uses GitHub. Visitors do not need a GitHub account to draw or rate.</p>
+    <p>Announcements may include embedded YouTube videos. These players load from YouTube’s privacy-enhanced domain, which still connects your browser to YouTube. Playing a video is subject to <a href="https://policies.google.com/privacy">Google’s privacy policy</a>.</p>
     <h2>contact messages</h2>
     <p>The contact form uses Formspree to receive messages and deliver them to Michael Baker. Submitting sends your selected topic, message, optional reply email, and optional drawing link to Formspree. The service also processes request information for delivery and spam protection. Messages are not published in the gallery or saved to sketchlet's drawing database; copies may be retained in Formspree and the receiving email inbox. See <a href="https://formspree.io/legal/privacy-policy/">Formspree's privacy policy</a>.</p>
     <h2>storage and removal</h2>

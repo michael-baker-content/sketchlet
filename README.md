@@ -110,6 +110,8 @@ Public gallery browsing currently covers up to 90 prompt dates and 200 drawings 
 
 ## keeping the pencils sharp
 
+The admin panel includes an announcement editor with drafts, previews, scheduled publishing, and unpublishing. Published posts appear on Info, and the latest title appears on home. See [announcement setup and usage](docs/ANNOUNCEMENTS.md).
+
 The dedicated `/profile` page contains name/photo editing, personal drawings, and optional account controls. Clerk sessions map to internal Neon accounts. Guest work from this browser or another address can be linked after explicit review and confirmation. Users choose which drawing to keep for each overlapping date; unselected drawings remain stored but hidden. Friend groups are planned separately. See [account setup, required database verification, and the groups plan](docs/ACCOUNTS.md) before releasing accounts.
 
 The shared footer links to About, Privacy, and Community & Terms. These are visibly marked drafts, readable without JavaScript, and excluded from search indexing. Review the [public-page publication checklist](docs/PUBLIC-PAGES.md) before treating them as final policies. Deploying the current build makes the drafts publicly accessible.

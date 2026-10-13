@@ -388,8 +388,21 @@ body:has(.submit-bar:not([hidden])) main { padding-bottom:0; }
 .admin-decision-note { border-left:3px solid #827294; padding:8px 12px; background:#eee9f2; }
 .admin-decision-note p { white-space:pre-wrap; overflow-wrap:anywhere; margin:4px 0 0; }
 .admin-filters label { display:grid; gap:4px; }
-.admin-review-list { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr)); gap:16px; margin-block:16px; }
-.admin-review-card { border:2px groove; padding:12px; min-width:0; overflow-wrap:anywhere; }
+.admin-review-list { display:grid; grid-template-columns:minmax(0,1fr); gap:8px; margin-block:16px; }
+.admin-review-card { border:2px groove; min-width:0; overflow-wrap:anywhere; }
+.admin-review-card>summary { padding:12px; cursor:pointer; background:#eeebf0; }
+.admin-review-card>summary:hover { background:#e2dce7; }
+.admin-review-card>summary:focus-visible { outline:3px solid #513463; outline-offset:2px; }
+.admin-review-meta { display:block; margin:4px 0 0 18px; font-size:13px; }
+@media(min-width:900px) {
+  .admin-review-card>summary { display:grid; grid-template-columns:12px minmax(0,1.2fr) minmax(0,1.6fr) minmax(0,1fr); align-items:center; gap:12px; list-style:none; }
+  .admin-review-card>summary::-webkit-details-marker { display:none; }
+  .admin-review-card>summary::before { content:'▸'; }
+  .admin-review-card[open]>summary::before { content:'▾'; }
+  .admin-review-card>summary>strong,.admin-review-card>summary>.admin-review-meta { min-width:0; margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .admin-review-card[open]>summary>strong,.admin-review-card[open]>summary>.admin-review-meta { white-space:normal; overflow:visible; }
+}
+.admin-review-details { padding:12px; border-top:1px solid #b4a5bf; }
 .admin-review-card img { width:100%; height:auto; max-width:200px; aspect-ratio:1; object-fit:contain; }
 .submission-dialog .admin-review-image { width:100%; max-width:420px; height:auto; }
 .report-explanation,.review-explanation { white-space:pre-wrap; overflow-wrap:anywhere; }

@@ -42,7 +42,7 @@ export function renderPageShell(file) {
   ${page.content ? '' : '<noscript><p>Please enable javascript to use sketchlet.</p></noscript>'}
   <header class="site-header">
     <a class="brand" href="/" aria-label="sketchlet home">sketchlet</a>
-    <nav aria-label="main navigation"><a id="open-home" href="/">home</a><a id="open-archive" href="/gallery">gallery</a><a href="/profile"${file === 'profile.html' ? ' aria-current="page"' : ''}>profile</a></nav>
+    <nav aria-label="main navigation"><a id="open-home" href="/">home</a><a id="open-archive" href="/gallery">gallery</a><a href="/profile"${file === 'profile.html' ? ' aria-current="page"' : ''}>profile</a><a href="/info"${file === 'info.html' ? ' aria-current="page"' : ''}>info</a></nav>
   </header>
   <main id="main-content" tabindex="-1">
     <section id="page-content" class="flow-panel" aria-labelledby="page-heading">
@@ -55,6 +55,7 @@ export function renderPageShell(file) {
     <small>© 2026 Michael Baker</small>
   </footer>
   <div id="toast" role="status" class="toast"></div>
+  <script type="module" src="/src/page-background.js"></script>
   ${page.script ? `<script type="module" src="${page.script}"></script>` : ''}
 </body>
 </html>

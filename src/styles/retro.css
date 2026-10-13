@@ -1,13 +1,14 @@
 /* Classic browser chrome, with the existing touch-friendly layout. */
 /* Hand-drawn diamond tiles also fill unused space beneath short pages. */
-:root{--page-pattern:url('../assets/diamond-pattern.svg');background:#e5ddea var(--page-pattern) repeat;background-size:192px 192px;color:#25163c;--line:#847094}
+:root{--page-pattern:linear-gradient(#a99bb8a8,#a99bb8a8),url('../assets/diamond-pattern.svg');background-color:#b2a4c0;background-image:var(--page-pattern);background-repeat:repeat;background-size:192px 192px;color:#25163c;--line:#847094}
 body{background:none}
 /* Progressive enhancement: translate one decorative layer, without scroll handlers
    or layout changes. Unsupported browsers keep the static root background. */
 @supports(animation-timeline:scroll()){
   @media(prefers-reduced-motion:no-preference){
     body{isolation:isolate}
-    body::before{content:'';position:fixed;inset:-64px 0;z-index:-1;pointer-events:none;background:#e5ddea var(--page-pattern) repeat;background-size:192px 192px;animation:page-pattern-drift linear both;animation-timeline:scroll(root block)}
+    body::before{content:'';position:fixed;inset:-64px 0;z-index:-1;pointer-events:none;background-color:#b2a4c0;background-image:var(--page-pattern);background-repeat:repeat;background-size:192px 192px;animation:page-pattern-drift linear both;animation-timeline:scroll(root block);filter:brightness(1);transition:filter 1.2s ease-in-out}
+    .page-scrolling body::before{filter:brightness(1.03);transition-duration:.6s}
     @keyframes page-pattern-drift{from{transform:translateY(0)}to{transform:translateY(-48px)}}
     .page-loading body::before,.drawing-focused body::before{display:none}
   }

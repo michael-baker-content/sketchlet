@@ -4,6 +4,8 @@ Vercel serves public assets from `dist/`, runs the application API through `api/
 
 ## 1. Check locally
 
+**Announcements:** apply migrations through `013_announcement_links.sql` before deploying the announcement editor, homepage descriptions, and readable links. See [announcement publishing and verification](ANNOUNCEMENTS.md). Scheduling is handled by database-time visibility on page loads; no cron configuration is needed.
+
 **Private account photos:** apply `010_private_avatars.sql` with `npm run db:migrate` against the deployment database before deploying the avatar update. It reuses the existing private bucket and credentials. No new environment variables or packages are needed.
 
 Accounts use `@clerk/backend`, optional Clerk keys, and migrations through `009_merge_choices.sql` (including `008_guest_transfers.sql`). Follow [ACCOUNTS.md](ACCOUNTS.md) for local and disposable-database verification. Before deploying this batch, ensure the production database has both transfer-code and conflict-choice migrations, even if a separate development database was already migrated. Include both migration files in the commit. Guest linking changes ownership only after confirmation; groups are not implemented yet. No additional dependency is needed if Clerk is installed. Free draw, profile previews, recent favorites, and styling changes need no additional migration. Earlier no-migration notes below apply only to their individual features.

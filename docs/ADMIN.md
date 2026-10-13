@@ -1,8 +1,8 @@
 # Administration
 
-The separate `/admin` page provides GitHub sign-in restricted to one account, submission and report review, and the latest 50 administrative activity entries. It does not load the drawing editor or change the visitor's guest identity.
+The separate `/admin` page provides GitHub sign-in restricted to one account, submission and report review, and administrative activity history. Activity initially shows the latest five entries; **load more** fetches five older entries at a time. Refreshing or saving an administrative action resets the list to the newest five. It does not load the drawing editor or change the visitor's guest identity.
 
-Choose **reports** to review open or resolved reports, or **submissions** to browse all/public/hidden drawings. Lists load in pages of 24. Review a drawing to hide it, restore it, clear its creator's display name, or resolve an individual report. Hiding requires a standard reason shown to the creator; notes remain private in the activity log. Report explanations and creator names are displayed as text.
+Choose **reports** to review open or resolved reports, or **submissions** to browse all/public/hidden drawings. Lists load in pages of 24 as collapsed text rows showing the prompt, date, creator, visibility, and report category/status or count. Expand a row to load its image, read additional details, and access **review drawing**. Rows support keyboard expansion and images are not requested until expanded. Review a drawing to hide it, restore it, clear its creator's display name, or resolve an individual report. Hiding requires a standard reason shown to the creator; notes remain private in the activity log. Report explanations and creator names are displayed as text.
 
 Hiding a drawing does not resolve its reports automatically. Resolving a report does not change visibility. Name clearing applies across that creator's drawings and permits them to choose a new name; it is not a name-change restriction. Clearing the visitor's browser data can reset their guest identity, so neither duplicate prevention nor future guest restrictions should be described as account-level enforcement.
 

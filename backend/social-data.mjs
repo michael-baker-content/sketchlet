@@ -2,6 +2,11 @@ import { neon } from '@neondatabase/serverless';
 
 // Public, read-only queries: no visitor cookie, votes, or editor initialization.
 const sql = neon(process.env.DATABASE_URL);
+export async function socialAnnouncements() {
+  return sql`SELECT id,title,body,description,slug,published_at FROM sketchlet_announcements
+    WHERE status IN ('published','scheduled') AND published_at<=now()
+    ORDER BY published_at DESC,id DESC LIMIT 50`;
+}
 export async function socialDrawing(id) {
   const [row] = await sql`SELECT d.id,d.prompt_day::text AS date,p.title AS prompt,
     profile.display_name AS name

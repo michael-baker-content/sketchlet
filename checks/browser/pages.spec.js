@@ -57,6 +57,7 @@ async function fixture(page, overrides = {}, { emptyDraft = false } = {}) {
       '/api/profile/drawings': { drawings: [drawing], next: null },
       '/api/queue': [],
       '/api/admin/reports': { items:[],next:null },
+      '/api/admin/announcements': { items:[] },
       '/api/admin/drawings': { items:[],next:null },
       '/api/account/sign-out': {ok:true},
       '/api/account/config': {enabled:false},
@@ -163,6 +164,110 @@ test('account photo is private, requires explicit local import, and loads on ano
     await expect(other.locator('#profile-edit-status')).toHaveText('profile saved');
     expect(photo).toBeNull();
   } finally { await context.close(); }
+});
+
+test('information pages remain readable and navigable with JavaScript disabled', async ({browser}) => {
+  const context = await browser.newContext({javaScriptEnabled:false});
+  try {
+    const page = await context.newPage();
+    await fixture(page);
+    for (const slug of ['info','about','privacy','community']) {
+      await page.goto('http://sketchlet.test/' + slug);
+      await expect(page.locator('#page-heading')).toBeVisible();
+      await expect(page.locator('.information-copy')).toBeVisible();
+      await expect(page.locator('#page-loader')).toBeHidden();
+      await expect(page.getByRole('navigation',{name:'main navigation'}).getByRole('link',{name:'info',exact:true})).toHaveAttribute('href','/info');
+    }
+  } finally { await context.close(); }
+});
+
+test('info illustrated navigation fits a narrow screen and links to its sections', async ({page}) => {
+  await fixture(page);
+  await page.setViewportSize({width:320,height:650});
+  await page.goto('/info');
+  const tiles = page.locator('.info-tile');
+  await expect(tiles).toHaveCount(4);
+  for (const tile of await tiles.all()) {
+    const bounds = await tile.boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
+    const target = await tile.getAttribute('href');
+    await expect(page.locator(target)).toHaveCount(1);
+  }
+  await tiles.nth(1).click();
+  await expect(page).toHaveURL(/#drawing-guide$/);
+});
+
+test('admin creates, previews, schedules and unpublishes an announcement', async ({page}) => {
+  let item=null;
+  await fixture(page,{
+    '/api/admin/status':route=>route.fulfill({json:{configured:true,authenticated:true,login:'artist',csrf:'fixture'}}),
+    '/api/admin/activity':route=>route.fulfill({json:{actions:[]}}),
+    '/api/admin/announcements':route=>route.fulfill({json:{items:item?[item]:[]}}),
+    '/api/admin/announcements/save':route=>{
+      expect(route.request().headers()['x-csrf-token']).toBe('fixture');
+      const body=route.request().postDataJSON();item={...body,version:body.version+1,published_at:body.publishAt};
+      return route.fulfill({json:{item}});
+    },
+  });
+  await page.goto('/admin');
+  const form=page.locator('#announcement-form');
+  await form.getByLabel('title',{exact:true}).fill('New brushes');
+  await form.getByLabel('short description (optional)',{exact:true}).fill('Meet your new drawing tools.');
+  await expect(page.locator('.announcement-home-preview')).toContainText('Meet your new drawing tools.');
+  await page.route('https://www.youtube-nocookie.com/**',route=>route.fulfill({contentType:'text/html',body:'<p>Video fixture</p>'}));
+  await form.getByLabel('message',{exact:true}).fill('**Hello**\n\n- Try a pencil\n\n[Open profile](/profile)\n\nhttps://youtu.be/dQw4w9WgXcQ');
+  await expect(page.locator('.announcement-preview strong')).toHaveText('Hello');
+  await expect(page.locator('.announcement-preview').getByRole('link',{name:'Open profile'})).toHaveAttribute('href','/profile');
+  await expect(page.locator('.announcement-preview iframe')).toHaveAttribute('src','https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ');
+  const frameBox=await page.locator('.announcement-preview iframe').boundingBox();
+  const previewBox=await page.locator('.announcement-preview').boundingBox();
+  expect(frameBox.width).toBeLessThanOrEqual(previewBox.width);
+  await form.getByRole('button',{name:'save draft',exact:true}).click();
+  await expect(page.locator('#announcement-status')).toHaveText('draft saved');
+  await form.getByLabel('publish time',{exact:true}).fill('2099-01-01T12:00');
+  await page.locator('#announcement-schedule').click();
+  await expect(page.locator('#announcement-status')).toContainText('Scheduled for');
+  await expect(page.locator('#announcement-state')).toContainText('2099');
+  expect(item.status).toBe('scheduled');
+  expect(item.description).toBe('Meet your new drawing tools.');
+  await page.reload();
+  await page.locator('#announcement-list button').filter({hasText:'New brushes'}).click();
+  await expect(form.getByLabel('short description (optional)',{exact:true})).toHaveValue('Meet your new drawing tools.');
+  await expect(page.locator('#announcement-state')).toContainText('Scheduled for');
+  await expect(page.locator('#announcement-state')).toContainText('2099');
+  await page.locator('#announcement-unpublish').click();
+  await expect(page.locator('#announcement-status')).toHaveText('draft saved');
+  expect(item.status).toBe('draft');
+});
+
+test('announcement save confirmation survives refresh failure and failed saves keep edits', async ({page}) => {
+  let saved=false, rejectSave=false;
+  await fixture(page,{
+    '/api/admin/status':route=>route.fulfill({json:{configured:true,authenticated:true,login:'artist',csrf:'fixture'}}),
+    '/api/admin/activity':route=>route.fulfill({json:{actions:[]}}),
+    '/api/admin/announcements':route=>route.fulfill(saved ? {status:503,json:{error:'list unavailable'}} : {json:{items:[]}}),
+    '/api/admin/announcements/save':route=>{
+      if(rejectSave) return route.fulfill({status:503,json:{error:'temporarily unavailable'}});
+      saved=true;const body=route.request().postDataJSON();
+      return route.fulfill({json:{item:{...body,version:body.version+1,published_at:body.publishAt}}});
+    },
+  });
+  await page.goto('/admin');
+  const form=page.locator('#announcement-form');
+  await form.getByLabel('title',{exact:true}).fill('Tomorrow');
+  await form.getByLabel('message',{exact:true}).fill('A message');
+  await form.getByLabel('publish time',{exact:true}).fill('2099-01-01T09:00');
+  await form.getByRole('button',{name:'save draft',exact:true}).click();
+  await expect(page.locator('#announcement-state')).toContainText('no publication scheduled');
+  await expect(page.locator('#announcement-status')).toContainText('The save succeeded');
+  rejectSave=true;
+  await form.getByLabel('publish time',{exact:true}).fill('2099-01-01T09:00');
+  await page.locator('#announcement-schedule').click();
+  await expect(page.locator('#announcement-status')).toContainText('Save not confirmed');
+  await expect(page.locator('#announcement-state')).toContainText('no publication scheduled');
+  await expect(form.getByLabel('message',{exact:true})).toHaveValue('A message');
+  await expect(page.locator('#announcement-unsaved')).toBeVisible();
 });
 
 function expectNoEditor(requests) {
@@ -591,6 +696,31 @@ test('fresh day shows instructions and preloads without mounting the editor unti
   expect(errors).toEqual([]);
 });
 
+test('home announcement shares the daily column and survives opening the editor',async({page})=>{
+  await fixture(page,{
+    '/':async route=>{
+      let status,headers,body;
+      await handlePublicPage({method:'GET'},{writeHead(code,values){status=code;headers=values;},end(value){body=value;}},new URL(route.request().url()),{
+        origin:'http://sketchlet.test',announcements:async()=>[{id,title:'Make yourself at home',body:'Hello',published_at:'2026-10-13T12:00:00Z'}],
+      });
+      await route.fulfill({status,headers,body});
+    },
+  },{emptyDraft:true});
+  await page.goto('/');
+  const column=page.locator('.welcome-day-column');
+  await expect(column.locator('.welcome-day')).toBeVisible();
+  await expect(column.locator('.home-announcement')).toBeVisible();
+  await expect(column.getByRole('link',{name:'Make yourself at home'})).toHaveAttribute('href',`/info#announcement-${id}`);
+  const day=await column.locator('.welcome-day').boundingBox();
+  const news=await column.locator('.home-announcement').boundingBox();
+  expect(Math.abs(day.x-news.x)).toBeLessThan(1);
+  expect(Math.abs(day.width-news.width)).toBeLessThan(1);
+  await page.locator('#begin-drawing').click();
+  await expect(page.locator('#canvas')).toBeVisible();
+  await expect(page.locator('.home-announcement')).toHaveCount(1);
+  await expect(page.locator('.home-announcement')).toBeVisible();
+});
+
 test('recent favorites refresh independently and stop requesting when drawing begins', async ({ page }) => {
   let refreshes = 0;
   await page.clock.install();
@@ -657,6 +787,28 @@ test('visitors can report a drawing without adding a profile name', async ({ pag
   expect(requests).not.toContain('/api/profile');expect(errors).toEqual([]);
 });
 
+test('admin activity loads five entries at a time and refresh resets the list',async({page})=>{
+  const calls=[];
+  await fixture(page,{
+    '/api/admin/status':route=>route.fulfill({json:{configured:true,authenticated:true,login:'artist',csrf:'fixture'}}),
+    '/api/admin/activity':route=>{
+      const before=new URL(route.request().url()).searchParams.get('before');calls.push(before);
+      const ids=before?['2','1']:['7','6','5','4','3'];
+      return route.fulfill({json:{actions:ids.map(id=>({id,created_at:'2026-10-13T12:00:00Z',actor_login:'artist',action:'sign_in'})),next:before?null:'3'}});
+    },
+  });
+  await page.goto('/admin');
+  await expect(page.locator('#admin-activity>li')).toHaveCount(5);
+  expect(calls).toEqual([null]);
+  await page.locator('#admin-activity-more').click();
+  await expect(page.locator('#admin-activity>li')).toHaveCount(7);
+  await expect(page.locator('#admin-activity-more')).toBeHidden();
+  expect(calls).toEqual([null,'3']);
+  await page.locator('#admin-refresh').click();
+  await expect(page.locator('#admin-activity>li')).toHaveCount(5);
+  await expect(page.locator('#admin-activity-more')).toBeVisible();
+});
+
 test('admin review hides, restores, and resolves independently with private notes and CSRF', async ({ page }) => {
   const writes=[];let visibility='public',resolved=false;
   const {errors}=await fixture(page, {
@@ -673,6 +825,12 @@ test('admin review hides, restores, and resolves independently with private note
   await page.goto('/admin');
   await expect(page.locator('.admin-review-card')).toContainText('<script>bad</script>');
   await expect(page.locator('.admin-review-card script')).toHaveCount(0);
+  await expect(page.locator('.admin-review-card img')).not.toBeVisible();
+  await expect(page.locator('.admin-review-card img')).not.toHaveAttribute('src');
+  await page.locator('.admin-review-card summary').focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.admin-review-card img')).toBeVisible();
+  await expect(page.locator('.admin-review-card img')).toHaveAttribute('src',`/api/admin/drawings/${id}/image`);
   await page.getByRole('button',{name:'review drawing',exact:true}).click();
   const dialog=page.getByRole('dialog',{name:'review drawing'});
   await expect(dialog.getByRole('combobox',{name:'action',exact:true})).toBeVisible();

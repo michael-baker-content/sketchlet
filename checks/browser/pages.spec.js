@@ -1075,6 +1075,12 @@ test('completed home displays the submission without fetching editor assets', as
   const { requests, errors } = await fixture(page, { '/api/today': route => route.fulfill({ json: { ...today, submission: drawing } }) });
   await page.goto('/');
   await expect(page.locator('.finished-drawing')).toBeVisible();
+  await expect(page.locator('.completed-home-content .home-highlights')).toBeVisible();
+  await expect(page.locator('.completed-home-content .pretend-ad')).toBeVisible();
+  await expect(page.locator('.completed-home-content .finished-drawing')).toHaveCount(0);
+  const submission=await page.locator('.submission-layout').boundingBox();
+  const extras=await page.locator('.completed-home-content').boundingBox();
+  expect(extras.y).toBeGreaterThanOrEqual(submission.y+submission.height);
   await expect(page.locator('canvas')).toHaveCount(0);
   expectNoEditor(requests);
   expect(errors).toEqual([]);

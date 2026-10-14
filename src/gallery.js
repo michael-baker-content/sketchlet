@@ -339,31 +339,43 @@ async function gallery(day){
     panel.querySelectorAll('[data-id]').forEach(button=>button.onclick=()=>{beginView();const drawing=items.find(d=>d.id===button.dataset.id);route(drawing.url);showDrawing(drawing);});
   }catch(error){if(generation===viewGeneration)errorScreen(error);}
 }
+function mountHomeContent(container,generation,dayPanel = null) {
+  const columns = document.createElement('div'); columns.className = 'welcome-columns';
+  const highlights = document.createElement('section'); highlights.className = 'home-highlights'; highlights.setAttribute('aria-labelledby','highlights-heading');
+  highlights.innerHTML = '<div class="panel-title"><h2 id="highlights-heading">recent favorites</h2></div><p class="highlights-description reading-copy">Explore more drawings and rate your favorites in the <a href="/gallery">gallery</a>.</p><div class="highlights-grid"></div><p class="highlights-status" role="status">loading recent favorites…</p><button class="web-button site-button utility" hidden>try again</button>';
+  const dayColumn = document.createElement('div'); dayColumn.className = 'welcome-day-column';
+  if (dayPanel) dayColumn.append(dayPanel);
+  if (homeAnnouncement) dayColumn.append(homeAnnouncement);
+  const pretendAd = document.createElement('aside'); pretendAd.className = 'pretend-ad';
+  pretendAd.setAttribute('aria-label','sketchlet account promotion');
+  pretendAd.innerHTML = `<p class="pretend-ad-label">a word from our sponsor: us.</p><div class="pretend-ad-content"><svg viewBox="0 0 64 64" aria-hidden="true" focusable="false" shape-rendering="crispEdges"><path fill="#51405f" d="M8 34h8v-8h8v-8h8v-8h16v8h8v24h-8v8h-8v8H16v-8H8z"/><path fill="#d49ebc" d="M16 34h8v-8h8v-8h12v8h8v12h-8v8H28v-8H16z"/><path fill="#f4e6bb" d="M16 38h8v8h16v4H20v-4h-4z"/><path fill="#fff7df" d="M4 8h4v4h4v4H8v4H4v-4H0v-4h4zm48 44h4v4h4v4h-4v4h-4v-4h-4v-4h4z"/></svg><div><h2>stay awhile!</h2><p class="pretend-ad-tagline">your doodles.<br>more places.</p><p class="pretend-ad-copy">Sign in to keep your submitted drawings together across devices.</p></div></div><a class="pretend-ad-link" href="/profile">sign in or visit your profile →</a><p class="pretend-ad-fineprint">free to join. guest drawing is always welcome.</p>`;
+  dayColumn.append(pretendAd);
+  columns.append(dayColumn,highlights); container.append(columns);
+  import('./home-highlights.js').then(({mountHomeHighlights}) => {
+    if (generation === viewGeneration && highlights.isConnected) disposeHighlights = mountHomeHighlights(highlights,api);
+  }).catch(() => { if (highlights.isConnected) highlights.querySelector('[role=status]').textContent = 'recent favorites are unavailable.'; });
+}
+
 async function load() {
   const generation = beginView();
   if (page === 'home') {
     await adoptDay(today);
     if (generation !== viewGeneration) return;
-    if (state.submission) { showDrawing(state.submission); return; }
+    if (state.submission) {
+      showDrawing(state.submission);
+      const extras = document.createElement('section'); extras.className = 'completed-home-content';
+      extras.setAttribute('aria-labelledby','completed-home-heading');
+      extras.innerHTML = '<div class="panel-title"><h2 id="completed-home-heading">more from sketchlet</h2></div>';
+      panel.append(extras);
+      mountHomeContent(extras,generation);
+      return;
+    }
     if (!editor) {
       if (!loadEditor) throw new Error('drawing tools are unavailable. please reload.');
       show(`<div class="panel-title"><h1 id="page-heading">today's drawing</h1></div><div class="drawing-welcome"><p class="display-date">${escape(formatPromptDate(state.date))}</p><h2>today's prompt: "${escape(state.prompt)}"</h2><p>draw your interpretation. a quick doodle is welcome.</p><ul><li>your draft saves on this device.</li><li>one drawing per day — final once saved to the gallery.</li><li>a new prompt arrives at midnight eastern.</li></ul>${storageUnavailable ? '<p role="status">local draft storage is unavailable. your drawing may not survive a reload.</p>' : ''}<button class="web-button site-button primary" id="begin-drawing">begin drawing</button><p id="begin-status" role="status"></p></div>`);
-      const columns = document.createElement('div'); columns.className = 'welcome-columns';
       const dayPanel = document.createElement('section'); dayPanel.className = 'welcome-day'; dayPanel.setAttribute('aria-labelledby','page-heading');
       dayPanel.append(...panel.childNodes);
-      const highlights = document.createElement('section'); highlights.className = 'home-highlights'; highlights.setAttribute('aria-labelledby','highlights-heading');
-      highlights.innerHTML = '<div class="panel-title"><h2 id="highlights-heading">recent favorites</h2></div><p class="highlights-description reading-copy">Explore more drawings and rate your favorites in the <a href="/gallery">gallery</a>.</p><div class="highlights-grid"></div><p class="highlights-status" role="status">loading recent favorites…</p><button class="web-button site-button utility" hidden>try again</button>';
-      const dayColumn = document.createElement('div'); dayColumn.className = 'welcome-day-column';
-      dayColumn.append(dayPanel);
-      if (homeAnnouncement) dayColumn.append(homeAnnouncement);
-      const pretendAd = document.createElement('aside'); pretendAd.className = 'pretend-ad';
-      pretendAd.setAttribute('aria-label','sketchlet account promotion');
-      pretendAd.innerHTML = `<p class="pretend-ad-label">a word from our sponsor: us.</p><div class="pretend-ad-content"><svg viewBox="0 0 64 64" aria-hidden="true" focusable="false" shape-rendering="crispEdges"><path fill="#51405f" d="M8 34h8v-8h8v-8h8v-8h16v8h8v24h-8v8h-8v8H16v-8H8z"/><path fill="#d49ebc" d="M16 34h8v-8h8v-8h12v8h8v12h-8v8H28v-8H16z"/><path fill="#f4e6bb" d="M16 38h8v8h16v4H20v-4h-4z"/><path fill="#fff7df" d="M4 8h4v4h4v4H8v4H4v-4H0v-4h4zm48 44h4v4h4v4h-4v4h-4v-4h-4v-4h4z"/></svg><div><h2>stay awhile!</h2><p class="pretend-ad-tagline">your doodles.<br>more places.</p><p class="pretend-ad-copy">Sign in to keep your submitted drawings together across devices.</p></div></div><a class="pretend-ad-link" href="/profile">sign in or visit your profile →</a><p class="pretend-ad-fineprint">free to join. guest drawing is always welcome.</p>`;
-      dayColumn.append(pretendAd);
-      columns.append(dayColumn,highlights); panel.append(columns);
-      import('./home-highlights.js').then(({mountHomeHighlights}) => {
-        if (generation === viewGeneration && highlights.isConnected) disposeHighlights = mountHomeHighlights(highlights,api);
-      }).catch(() => { if (highlights.isConnected) highlights.querySelector('[role=status]').textContent = 'recent favorites are unavailable.'; });
+      mountHomeContent(panel,generation,dayPanel);
       $('#begin-drawing').onclick = async () => {
         const button = $('#begin-drawing'); button.disabled = true; button.textContent = 'opening…';
         try {

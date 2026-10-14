@@ -71,7 +71,7 @@ test('information drafts are readable without JavaScript, cookies, or database a
       assert.match(result.body, new RegExp(`href="/${slug}" aria-current="page"`));
       // Decoration is progressive enhancement; content must not need an app loader.
       assert.deepEqual([...result.body.matchAll(/<script\b[^>]*>[\s\S]*?<\/script>/g)].map(match => match[0]),
-        ['<script type="module" src="/src/page-background.js"></script>']);
+        ['<script type="module" src="/src/page-background.js"></script>','<script type="module" src="/src/site-header.js"></script>']);
       assert.doesNotMatch(result.body, /<canvas|please enable javascript|class="empty-state"/);
     }
     const head = await response(`/${slug}`, {}, 'HEAD');
@@ -118,7 +118,7 @@ test('home and gallery serve social metadata without cookies or database access'
     assert.match(result.body, path === '/' ? /src\/home-page.js/ : /src\/gallery-page.js/);
     assert.doesNotMatch(result.body, path === '/' ? /src\/gallery-page.js/ : /src\/home-page.js/);
     assert.deepEqual([...result.body.matchAll(/<script type="module" src="([^"]+)"/g)].map(match => match[1]),
-      ['/src/page-background.js',path === '/' ? '/src/home-page.js' : '/src/gallery-page.js']);
+      ['/src/page-background.js','/src/site-header.js',path === '/' ? '/src/home-page.js' : '/src/gallery-page.js']);
     assert.equal((result.body.match(/id="page-loader"/g) || []).length, 1);
     assert.doesNotMatch(result.body, /\$\{page\./);
     assert.doesNotMatch(result.body, /<canvas|src="\/src\/studio.js"/);

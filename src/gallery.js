@@ -1,4 +1,3 @@
-import { mountProfilePhoto } from './profile-details.js';
 import { api } from './api-client.js';
 import { counted } from './text-format.js';
 import { easternDate, promptForDate, formatPromptDate } from './prompts.js';
@@ -55,7 +54,6 @@ function prepareIntro() {
   if (intro) intro.innerHTML = '<div class="daily-heading"><div><p class="prompt-date"></p><h1></h1></div></div>';
 }
 prepareIntro();
-mountProfilePhoto();
 const nameDialog = document.createElement('dialog');
 nameDialog.className = 'submission-dialog';
 nameDialog.setAttribute('aria-labelledby','name-heading');

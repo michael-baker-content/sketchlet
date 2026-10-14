@@ -155,6 +155,12 @@ test('account photo is private, requires explicit local import, and loads on ano
   await page.locator('#save-name').click();
   await expect(page.locator('#profile-edit-status')).toHaveText('profile saved');
   expect(writes).toBe(1);
+  for (const path of ['/info','/about','/privacy','/gallery']) {
+    await page.goto(path);
+    await expect(page.locator('.nav-profile-photo')).toHaveCount(1);
+    await expect(page.locator('.nav-profile-photo')).toBeVisible();
+    await expect(page.locator('.nav-profile-photo')).toHaveAttribute('src',photo);
+  }
   const context = await browser.newContext();
   try {
     const other = await context.newPage(); await setup(other); await other.goto('/profile');
@@ -732,6 +738,14 @@ test('recent favorites refresh independently and stop requesting when drawing be
   await expect(page.locator('.highlight-card')).toHaveAttribute('href',drawing.url);
   await expect(page.locator('.highlight-card small')).toHaveText('4.5 / 5 · 2 ratings');
   await page.locator('.home-highlights').scrollIntoViewIfNeeded();
+  // Scrolling completes before IntersectionObserver necessarily delivers its
+  // visibility change. Wait for delivery before jumping to the refresh timer.
+  await page.locator('.home-highlights').evaluate(element => new Promise(resolve => {
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting)) { observer.disconnect(); resolve(); }
+    });
+    observer.observe(element);
+  }));
   await page.clock.fastForward(60000);
   await expect(page.locator('.highlight-card')).toHaveCount(0);
   await expect(page.locator('.highlights-status')).toContainText('no qualifying drawings');

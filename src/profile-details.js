@@ -7,7 +7,9 @@ function readPhoto() {
 }
 export function mountProfilePhoto() {
   const nav = document.querySelector('.site-header nav');
+  if (!nav || nav.querySelector('.nav-profile-photo')) return;
   const image = document.createElement('img');
+  image.hidden = true;
   image.className = 'nav-profile-photo'; image.alt = 'your local profile photo'; image.width = image.height = 32;
   nav.append(image);
   let revision = 0;

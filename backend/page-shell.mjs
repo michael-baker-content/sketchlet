@@ -56,6 +56,7 @@ export function renderPageShell(file) {
   </footer>
   <div id="toast" role="status" class="toast"></div>
   <script type="module" src="/src/page-background.js"></script>
+  <script type="module" src="/src/site-header.js"></script>
   ${page.script ? `<script type="module" src="${page.script}"></script>` : ''}
 </body>
 </html>

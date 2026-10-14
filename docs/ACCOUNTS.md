@@ -10,6 +10,8 @@ The header links to standalone `/profile` for guests and accounts. It contains n
 
 ## Private account photos
 
+Every page initializes its navigation avatar through the shared `site-header.js` module, including Info and policy pages. Account photos use authenticated requests; guest photos remain device-local. Information content stays readable without JavaScript or a successful avatar request.
+
 Migration `010_private_avatars.sql` adds an account avatar object key. Apply it before deploying this feature. `/api/profile/avatar` uses the existing verified owner resolver, requires bearer authentication and an account record, and supports GET plus same-origin, rate-limited POST. It never accepts another user's ID or a storage key from the client. Reads return inline JPEG data with `private, no-store`; neither object keys nor avatar URLs appear in public APIs. Objects live under `avatars/` in the existing private drawings bucket, without a new storage service.
 
 The server bounds input, decodes and normalizes it to a metadata-free 256px JPEG. Replacement/removal updates the private pointer and attempts cleanup of the old object. Failed cleanup or concurrent replacements can leave unreachable objects for storage reconciliation; they do not make photos public. Ambiguous database failures preserve new objects rather than risking deletion of a committed photo.
@@ -23,6 +25,12 @@ Linking preserves drawing IDs, URLs, objects, moderation state, and received rat
 Migration `009_merge_choices.sql` enables these choices for both local linking and transfer codes. Each additional browser/address can be imported independently into the same account. Old clients may still import nonconflicting work, but must reload to resolve conflicts. The server requires exactly one selection per reviewed conflicting pair and rejects missing, extra, or unrelated selections before writing. Review revisions include both drawing IDs and preview availability, so replacing an account entry invalidates another pending review. Previously linked accounts (including a separate Clerk development account) cannot be merged using guest codes.
 
 A future opt-in gallery of unselected drawings is a backlog idea only. Retention of the merge tag does not publish these images or grant permission to republish them. Unfinished drafts remain out of scope.
+
+### Targeted development-account recovery
+
+`node scripts/inspect-account-drawings.mjs "mickey" "Michael Baker"` is a read-only inventory by display name. Names are not unique; recovery must use confirmed internal account IDs.
+
+`node scripts/recover-mickey-drawings.mjs --apply` is a site-owner-authorized, one-time recovery for the two explicitly identified October 2 and October 12 drawings. It checks the exact account IDs, Clerk instances, drawing IDs, dates, ownership, and absence of conflicts inside a transaction. It preserves image objects, URLs, moderation, and received ratings from other people; it removes either account's self-votes on the recovered drawings and records the transfer in administrative activity. Rerunning after success makes no further changes. Any conflict aborts the transaction. This is not a general account merger: profiles, avatars, other votes, reports, and the source account remain separate. These scripts are maintenance tools and are not part of the public build or automatic migrations.
 
 Database triggers serialize identity writes with linking and reject writes using a retired guest identity. The server rotates retired guest cookies instead of treating them as account credentials. Sign-out preserves unlinked guest cookies; only retired or missing identities receive a new cookie. A non-authenticating browser hint loads Clerk for signed-in API requests; guests do not wait for Clerk. Missing/expired account sessions fail rather than silently submitting as a guest. Visit `/profile` to reconnect or return to guest use. Drawing strokes still run entirely locally and do not contact Clerk or Neon.
 

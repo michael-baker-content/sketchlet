@@ -1,7 +1,7 @@
 import { loadAccountClient, accountRequest, accountReturnUrl, rememberAccount } from './account-client.js';
 import { revealPage, startupError } from './page-startup.js';
 import { counted } from './text-format.js';
-import { mountProfileDetails, mountProfilePhoto } from './profile-details.js';
+import { mountProfileDetails } from './profile-details.js';
 import { api } from './api-client.js';
 import { mountGuestTransfer } from './guest-transfer.js';
 import { linkingNotice, renderMergeReview } from './merge-review.js';
@@ -32,7 +32,6 @@ async function start() {
       </section>
       <p id="guest-link-help">While signed in, new drawings and ratings belong to your account. Existing guest work stays separate until you confirm linking. Unfinished drafts stay on this device. Account photos sync privately; browser photos are uploaded only when you choose to save them to your account.</p>
     </div>`;
-  mountProfilePhoto();
   const details = document.createElement('section');
   details.className = 'information-copy profile-details';
   panel.append(details);

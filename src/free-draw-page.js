@@ -1,12 +1,10 @@
 import { loadEditor } from './editor-loader.js';
 import { revealPage, startupError } from './page-startup.js';
-import { mountProfilePhoto } from './profile-details.js';
 import { api } from './api-client.js';
 
 async function start() {
   const editor = await loadEditor();
   const $ = selector => document.querySelector(selector);
-  mountProfilePhoto();
   $('.intro').innerHTML = '<div class="daily-heading"><div><p class="prompt-date">just for you</p><h1>free draw</h1></div></div>';
   $('#drawing-heading').textContent = 'free draw';
   $('.studio-title').textContent = 'free draw';

@@ -33,10 +33,11 @@ test('reports and removal decisions accept only bounded, predefined inputs', () 
   assert.throws(() => reviewCursor('1;delete'));
 });
 
-test('home highlights use public visibility, bounded recent dates and at least two high ratings', async () => {
+test('home highlights prioritize recent work with older fallback and retain rating and visibility requirements', async () => {
   const f = fixture(text => {
     assert.match(text,/FROM sketchlet_public_drawings/);
-    assert.match(text,/BETWEEN \?::date-13 AND \?::date/);
+    assert.match(text,/WHERE d.prompt_day <= \?::date/);
+    assert.match(text,/ORDER BY \(d.prompt_day >= \?::date-13\) DESC,\s*stats.average DESC,stats.count DESC,d.created_at DESC,d.id DESC/);
     assert.match(text,/stats.count>=2 AND stats.average>=4/);
     assert.match(text,/LIMIT 4/);
     return [{id,day:'2026-10-10',title:'a singing kite',owner_hash:owner,average:'4.5',count:'2',display_name:'artist'}];

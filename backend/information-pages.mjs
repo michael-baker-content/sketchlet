@@ -17,7 +17,7 @@ export const informationPages = new Map([
         <dt>line</dt><dd>Press where the line should start, drag to its endpoint, and release. Lines use a solid stroke with the selected size and shape.</dd>
         <dt>fill</dt><dd>Tap a connected area to fill it with your selected color. Gaps in a boundary let the color through. Undo reverses the whole fill.</dd>
         <dt>dashed &amp; dotted</dt><dd>Draw a trail of separated marks. Try different sizes and shapes to change the rhythm.</dd>
-        <dt>shape, size &amp; erase</dt><dd>Choose circle, square, or rough shapes and fine, mid, or bold sizes. Switch to erase to remove marks. For spray, shape controls the dots.</dd>
+        <dt>shape, size &amp; erase</dt><dd>Choose circle, square, or rough shapes. Adjust the size slider from fine to bold; the preview shows the size on your canvas. Each tool remembers its size while you draw. Switch to erase to remove marks. For spray, shape controls the dots.</dd>
       </dl>
       <div class="content-notice"><strong>Drawing with your finger?</strong><p>Your mark appears a little above your finger so you can see it. The strip below the canvas lets you reach the bottom edge. Full-screen mode makes more room when your screen supports it.</p></div>
       <p>Undo and redo let you revisit changes during a session. Clearing the canvas can also be undone. Download saves a PNG; “save to gallery” publishes your daily drawing and is final.</p>
@@ -50,6 +50,7 @@ export const informationPages = new Map([
     <p>sketchlet uses guest and hashed network identifiers to limit repeated requests and abuse. It uses Vercel for hosting and Neon for database and image storage. The site requests its font from Google Fonts. Those services receive information needed to handle requests, which can include network and browser information.</p>
     <p>Administrator sign-in uses GitHub. Visitors do not need a GitHub account to draw or rate.</p>
     <p>Announcements may include embedded YouTube videos. These players load from YouTube’s privacy-enhanced domain, which still connects your browser to YouTube. Playing a video is subject to <a href="https://policies.google.com/privacy">Google’s privacy policy</a>.</p>
+    <p>If you create or join a group, sketchlet stores its name, description, listing preference, membership requests, roles, and a history of group-management actions. Approved members can see the group's members and display names; owners and approvers can also see pending requests. Unlisted groups are omitted from search but can be opened through their link. Group membership does not make drawings private.</p>
     <h2>contact messages</h2>
     <p>The contact form uses Formspree to receive messages and deliver them to Michael Baker. Submitting sends your selected topic, message, optional reply email, and optional drawing link to Formspree. The service also processes request information for delivery and spam protection. Messages are not published in the gallery or saved to sketchlet's drawing database; copies may be retained in Formspree and the receiving email inbox. See <a href="https://formspree.io/legal/privacy-policy/">Formspree's privacy policy</a>.</p>
     <h2>storage and removal</h2>

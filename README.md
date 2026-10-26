@@ -23,23 +23,23 @@ Each published drawing has its own shareable link, where you can return to see i
 
 ## inside the pencil case
 
-The canvas is square, with a 1200 × 1200 pixel export and support for mouse, touch, and pen input.
+The canvas is square, with a 1200 × 1200 pixel export and support for mouse, touch, and pen input. Its display is capped at 400 CSS pixels across normal and full-screen modes, keeping desktop drawing space closer to phone sizes. Smaller screens still shrink it to fit. The size slider spans 5–96 image pixels in one-pixel steps; old drafts keep their original sizes.
 
 | pick | what's inside |
 | --- | --- |
 | color | 24 colors for both ink and background, from soft pastels to midnight, navy, and forest |
-| size | fine, mid, and bold |
+| size | a slider from fine to bold, with a live preview; each tool remembers its size while the editor is open |
 | shape | circle, square, and rough |
 | drawing tools | brush, marker, pencil, spray, line, fill, dashed, dotted |
 | second thoughts | eraser, undo, redo, and an undoable clear |
 
-Shapes work across every brush style and the eraser. Marker strokes are translucent, pencil grain builds up as you draw over it, and spray scatters small shaped dots.
+Shapes work across every brush style and the eraser. Marker strokes are translucent, pencil grain builds up as you draw over it, and spray scatters small shaped dots that scale continuously with the size slider. Previously saved strokes up to size 120 remain readable even though the current slider stops at 96.
 
 Choose **line** in drawing tools, drag to preview, and release to commit a solid line using your selected size and shape. **Fill** colors the connected area you tap; size and shape are disabled for fill. A small color tolerance includes softened edges, but gaps in pencil or spray boundaries remain openings. Each line or fill is one undo step. The draw/erase selector still switches to the regular eraser.
 
 Drawing and erasing follow your input without an added animation delay. The drawing workspace suppresses text selection and the canvas's long-press menu to keep gestures focused on drawing. Undo remembers up to 60 edits during the current session. **Ctrl/Cmd+Z** undoes; **Ctrl/Cmd+Shift+Z** redoes.
 
-Phones and tablets get compact dropdown tools. Full-screen mode puts the drawing workspace in charge: no page scrolling, no header, and no submission buttons in the way. Close it to return to the normal page with your canvas and history intact. Desktop works too.
+Phones and tablets get compact dropdown tools and a brush-size slider with a live preview. Full-screen mode puts the drawing workspace in charge: no page scrolling, no header, and no submission buttons in the way. Close it to return to the normal page with your canvas and history intact. Desktop works too.
 
 When drawing with a finger, the hollow cursor targets 24 screen pixels above your touch so you can see your mark. The narrow strip below the canvas lets you reach its bottom edge; it isn't part of your saved image. Mouse and stylus input stay directly under the pointer. Contrasting cursor outlines help on light and dark backgrounds.
 
@@ -47,13 +47,17 @@ When drawing with a finger, the hollow cursor targets 24 screen pixels above you
 
 The [gallery](https://sketchlet.app/gallery) groups drawings by prompt. Each prompt's preview shows its highest-rated drawing, or its newest submission if nobody has rated one yet.
 
+Home's **recent favorites** puts drawings from the past 14 days first, then fills any remaining spots with older favorites. Up to four drawings appear, each with at least two ratings and an average of four stars or better.
+
 You can rate drawings **before making your own**. Add a name to your profile, then give drawings 1–5 stars or skip. The queue mixes today's drawings, older prompts, under-rated entries, and favorites. Your own drawings stay out of the queue, and you can revise an earlier vote from a drawing's page.
 
 Old prompts remain open for looking and rating; new submissions belong to today's prompt.
 
 ## your little corner
 
-You can draw as a guest, remembered by a browser cookie. Optional Clerk accounts are in pre-release verification; the profile page supports account sign-in when configured.
+You can draw as a guest, remembered by a browser cookie, or sign in with email or Google to keep your submitted drawings together across devices. Unfinished drafts remain on the device where you started them.
+
+If your sign-in expires, a **welcome back** panel offers sign-in or an explicit choice to continue as a guest. Your account drawings stay saved; the site never silently switches new submissions to a guest identity.
 
 Your profile holds an optional display name and a preview of your five most recent drawings, with a link to **your gallery** for the full collection. Changing your name updates the attribution on earlier drawings too. Names aren't unique or verified; leaving yours blank displays “anonymous.” A name is required for rating.
 
@@ -102,7 +106,7 @@ The main pieces are:
 
 Daily prompts now follow a [26-week curated calendar](docs/PROMPTS.md), mixing simple visual twists, familiar named subjects, and occasional pairs or trios. Existing prompt galleries retain their original titles.
 
-Sketchlet is an early version. Optional accounts and reviewed guest-drawing transfers are implemented. Friend groups, community-suggested prompts, and old-draft recovery are future work.
+Sketchlet is an early version. Optional accounts, reviewed guest-drawing transfers, and the first group membership controls are implemented. Group drawing feeds and admin group management are next; community-suggested prompts and old-draft recovery remain future work.
 
 The `/admin` page supports owner-only GitHub sign-in, submission and report review, reversible drawing removal, display-name clearing, and an activity log. Visitors can report drawings without logging in. Hidden drawings remain that day's submission and cannot be replaced. Guest restrictions, prompt management, and email alerts are still planned.
 
@@ -112,7 +116,7 @@ Public gallery browsing currently covers up to 90 prompt dates and 200 drawings 
 
 The admin panel includes an announcement editor with drafts, previews, scheduled publishing, and unpublishing. Published posts appear on Info, and the latest title appears on home. See [announcement setup and usage](docs/ANNOUNCEMENTS.md).
 
-The dedicated `/profile` page contains name/photo editing, personal drawings, and optional account controls. Clerk sessions map to internal Neon accounts. Guest work from this browser or another address can be linked after explicit review and confirmation. Users choose which drawing to keep for each overlapping date; unselected drawings remain stored but hidden. Friend groups are planned separately. See [account setup, required database verification, and the groups plan](docs/ACCOUNTS.md) before releasing accounts.
+The dedicated `/profile` page contains name/photo editing, personal drawings, optional account controls, and group creation/membership management. Clerk sessions map to internal Neon accounts. Guest work from this browser or another address can be linked after explicit review and confirmation. Users choose which drawing to keep for each overlapping date; unselected drawings remain stored but hidden. See [account setup](docs/ACCOUNTS.md) and [group membership setup and verification](docs/GROUPS.md) before release.
 
 The shared footer links to About, Privacy, and Community & Terms. These are visibly marked drafts, readable without JavaScript, and excluded from search indexing. Review the [public-page publication checklist](docs/PUBLIC-PAGES.md) before treating them as final policies. Deploying the current build makes the drafts publicly accessible.
 

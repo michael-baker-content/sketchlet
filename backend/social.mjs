@@ -136,7 +136,10 @@ export async function handlePublicPage(req, res, url, dependencies = {}) {
       try {
         const [latest] = await deps.announcements();
         if (latest) html = html.replace('</main>',`<aside class="home-announcement" aria-label="latest announcement"><div class="panel-title"><h2>from Michael</h2><span aria-hidden="true">✉</span></div><div class="home-announcement-body reading-copy"><p class="home-announcement-label">Latest site news</p><a href="${escape(announcementPath(latest))}">${escape(latest.title)}</a>${latest.description ? `<p>${escape(latest.description)}</p>` : ''}</div></aside></main>`);
-      } catch { /* Announcements never block the daily page. */ }
+      } catch {
+        // Keep the destination visible when the preview cannot be retrieved.
+        html = html.replace('</main>','<aside class="home-announcement" aria-label="latest announcement"><div class="panel-title"><h2>from Michael</h2><span aria-hidden="true">✉</span></div><div class="home-announcement-body reading-copy"><a href="/info#announcements">news &amp; notes about new sketchlet features</a><p>The latest announcement could not load. Visit Info to try again.</p></div></aside></main>');
+      }
     }
     const body = html.replace(/<title>[\s\S]*?<\/title>/, socialTags(meta, origin));
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': id ? 'private, no-store' : path === '/' ? 'no-store' : 'public, max-age=0, s-maxage=300' });

@@ -1,3 +1,5 @@
+import { rememberAccount } from './account-client.js';
+
 // Resolve eligibility before loading the editor or opening draft storage.
 export async function startHome({ loadToday, loadEditor, checkDraft, startPage }) {
   const today = await loadToday();
@@ -13,6 +15,20 @@ export function startupError(error) {
   for (const element of document.querySelectorAll('.studio, .intro, .submit-bar')) element.hidden = true;
   const panel = document.querySelector('#page-content');
   panel.hidden = false;
+  if (error.code === 'account_session') {
+    panel.innerHTML = `<div class="panel-title"><h1 id="page-heading" tabindex="-1">welcome back</h1></div>
+      <div class="session-welcome reading-copy"><h2>Pick up where you left off.</h2>
+      <p>Your sign-in session has ended. Sign in again to see your drawing collection and today’s progress.</p>
+      <div class="gallery-actions"><a class="web-button site-button primary" href="/profile">sign in again</a><button class="web-button site-button utility" id="continue-guest">continue as guest</button></div>
+      <p>Your account drawings are still saved. If you continue as a guest, new submissions won’t be attached to your account.</p></div>`;
+    panel.querySelector('#continue-guest').onclick = () => {
+      rememberAccount(false);
+      window.location.reload();
+    };
+    window.sketchletLoading?.finish();
+    panel.querySelector('h1').focus({preventScroll:true});
+    return;
+  }
   const heading = document.createElement('h1');
   heading.id = 'page-heading'; heading.textContent = 'could not load'; heading.tabIndex = -1;
   panel.replaceChildren(heading);
@@ -25,11 +41,6 @@ export function startupError(error) {
   retry.textContent = 'try again';
   retry.onclick = () => window.location.reload();
   panel.append(message, retry);
-  if (error.code === 'account_session') {
-    const profile = document.createElement('a');
-    profile.href = '/profile'; profile.textContent = 'go to profile';
-    panel.append(profile);
-  }
   window.sketchletLoading?.finish();
   heading.focus();
 }

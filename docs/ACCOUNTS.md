@@ -1,6 +1,8 @@
 # Accounts and friend groups
 
-## Current stage: account ownership and guest linking
+## Current stage: account ownership, guest linking, and group membership
+
+The initial group membership layer is available on Profile for signed-in users. See [GROUPS.md](GROUPS.md) for migration `014_groups.sql`, permissions, limits, and required database verification. Group drawing feeds and admin management are the next stages.
 
 `/profile` is a standalone, unindexed account setup preview. Clerk handles email-code and Google sign-in. The Node backend verifies a Clerk session token and idempotently creates an internal account in Neon. No email, password, or Clerk secret is sent to the public account response. Internal account IDs and owner hashes are independent of Clerk user IDs; mappings are scoped to the Clerk instance so development and production users cannot collide.
 
@@ -26,11 +28,10 @@ Migration `009_merge_choices.sql` enables these choices for both local linking a
 
 A future opt-in gallery of unselected drawings is a backlog idea only. Retention of the merge tag does not publish these images or grant permission to republish them. Unfinished drafts remain out of scope.
 
-### Targeted development-account recovery
+### Account ownership inspection
 
-`node scripts/inspect-account-drawings.mjs "mickey" "Michael Baker"` is a read-only inventory by display name. Names are not unique; recovery must use confirmed internal account IDs.
+`node scripts/inspect-account-drawings.mjs "Display Name"` is a read-only inventory by display name. Names are not unique; recovery must use confirmed internal account IDs. This maintenance tool is not part of the public build and does not transfer drawings.
 
-`node scripts/recover-mickey-drawings.mjs --apply` is a site-owner-authorized, one-time recovery for the two explicitly identified October 2 and October 12 drawings. It checks the exact account IDs, Clerk instances, drawing IDs, dates, ownership, and absence of conflicts inside a transaction. It preserves image objects, URLs, moderation, and received ratings from other people; it removes either account's self-votes on the recovered drawings and records the transfer in administrative activity. Rerunning after success makes no further changes. Any conflict aborts the transaction. This is not a general account merger: profiles, avatars, other votes, reports, and the source account remain separate. These scripts are maintenance tools and are not part of the public build or automatic migrations.
 
 Database triggers serialize identity writes with linking and reject writes using a retired guest identity. The server rotates retired guest cookies instead of treating them as account credentials. Sign-out preserves unlinked guest cookies; only retired or missing identities receive a new cookie. A non-authenticating browser hint loads Clerk for signed-in API requests; guests do not wait for Clerk. Missing/expired account sessions fail rather than silently submitting as a guest. Visit `/profile` to reconnect or return to guest use. Drawing strokes still run entirely locally and do not contact Clerk or Neon.
 
@@ -71,10 +72,10 @@ Automated account-handler tests use injected verification/storage, and browser t
 
 ## Agreed next stages
 
-After the current account/transfer and drawing improvements are deployed, the next implementation milestone is group creation and membership management on `/profile`: database constraints and server authorization first, followed by create/search/request/approve interfaces and admin oversight. Gallery filters follow that foundation. Clerk establishes identity; Neon remains the source of group roles and permissions. Keep this as a separate feature change from the current release.
+Group creation, discovery, join requests, and membership roles now have an initial implementation on `/profile`; [GROUPS.md](GROUPS.md) distinguishes implemented features from remaining work. Gallery filters and admin oversight follow this foundation. Clerk establishes identity; Neon remains the source of group roles and permissions. The list below records the full agreed direction, including features not yet implemented.
 
 1. **Verify guest linking and account ownership.** Implementation is in place; run the disposable-database test and live account checks above before release. Test account-session expiry and switching accounts on a shared browser as well.
-2. **Verify `/profile`.** The page conversion is implemented. Check direct navigation and reload, guest editing, account switching, name/photo saving, removed drawings, pagination, and name entry during rating. Group management will be added here later.
+2. **Verify `/profile`.** The page conversion is implemented. Check direct navigation and reload, guest editing, account switching, name/photo saving, removed drawings, pagination, name entry during rating, and the initial group membership controls.
 3. **Groups and approvals.** Neon owns groups and memberships. Names are unique case-insensitively, with numeric suffix suggestions when taken. Optional description, listed/unlisted, join requests always require approval—including requests from invitation links. Members can belong to multiple groups.
 4. **Roles.** Owner can rename, manage members, grant/revoke approvers, transfer ownership, and delete the group. Approvers can accept/decline requests and toggle listed/unlisted; no delegated rename/removal powers initially. Members can leave. No group-level drawing hiding.
 5. **Visibility and gallery.** Everyone / my groups / one group filters, deduplicating drawings in the combined view. Groups show all historical drawings by current members; leaving removes that association. Nonmembers see only name, description, and join request. Only members see roster/group gallery. Unlisted groups stay out of search and public profile associations. Individual drawings remain public; unlisted does not mean private artwork.

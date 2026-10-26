@@ -1,4 +1,4 @@
-import { COLORS, BACKGROUND_COLORS, colorEntry, BRUSH_SIZES, CANVAS_SIZE, createDocument, draftKey, restoreDraft, History } from './model.js';
+import { COLORS, BACKGROUND_COLORS, colorEntry, BRUSH_SIZE_MIN, BRUSH_SIZE_MAX, validBrushSize, CANVAS_SIZE, createDocument, draftKey, restoreDraft, History } from './model.js';
 import { BRUSH_SHAPES, DRAWING_TOOLS, createBrushRenderer, roughVertices } from './brushes.js';
 import { fillRuns, drawFill } from './fill.js';
 import { openDraftDatabase, readDraft } from './draft-storage.js';
@@ -40,6 +40,12 @@ async function prepareImageStroke(stroke) {
   imageStrokes.set(stroke,image);
 }
 let tool = 'brush', color = COLORS[0].value, size = 14, brushStyle = 'brush', brushShape = 'circle';
+const toolSizes = new Map();
+const sizeKey = () => tool === 'eraser' ? 'eraser' : brushStyle;
+function restoreToolSize() { size = toolSizes.get(sizeKey()) ?? 14; }
+function sizeControl(focus = false) {
+  return `<span class="size-control"><input type="range" ${focus ? 'data-focus="size"' : 'id="brush-size"'} data-brush-size min="${BRUSH_SIZE_MIN}" max="${BRUSH_SIZE_MAX}" step="1" value="14" aria-label="brush size"><span class="size-preview" aria-hidden="true"><i></i></span></span>`;
+}
 // Views subscribe after their controls are constructed. State changes call this
 // directly; markup and synthetic input events are never the source of truth.
 let syncToolViews = () => {};
@@ -102,7 +108,7 @@ for (const eventName of ['pointerup', 'pointercancel', 'lostpointercapture']) dr
 });
 drawingSurface.addEventListener('pointerleave', () => { if (touchContact !== null) return; cursorPoint = null; eraserCursor.classList.remove('visible'); });
 window.addEventListener('blur', () => { touchContact = null; cursorPoint = null; eraserCursor.classList.remove('visible'); });
-new ResizeObserver(() => updateEraserCursor()).observe(canvas);
+new ResizeObserver(() => { updateEraserCursor(); syncToolViews(); }).observe(canvas);
 document.addEventListener('scroll', () => { cursorPoint = null; eraserCursor.classList.remove('visible'); }, true);
 
 function toast(message) { $('#toast').textContent = message; $('#toast').classList.add('visible'); clearTimeout(toastTimer); toastTimer = setTimeout(() => $('#toast').classList.remove('visible'), 2600); }
@@ -191,6 +197,7 @@ function changed() { render(); syncControls(); scheduleSave(); }
 function selectTool(next) {
   if (!['brush', 'eraser'].includes(next)) return;
   tool = next;
+  restoreToolSize();
   syncToolViews(); updateEraserCursor();
 }
 function selectColor(value, background = false) {
@@ -267,15 +274,17 @@ for (const [select, options] of [[$('#brush-shape'), BRUSH_SHAPES], [$('#brush-s
   for (const value of options) select.add(new Option(value, value));
 }
 function selectShape(value) { if (!BRUSH_SHAPES.includes(value)) return; brushShape = value; syncToolViews(); updateEraserCursor(); }
-function selectStyle(value) { if (!DRAWING_TOOLS.includes(value)) return; brushStyle = value; syncToolViews(); }
+function selectStyle(value) { if (!DRAWING_TOOLS.includes(value)) return; brushStyle = value; restoreToolSize(); syncToolViews(); updateEraserCursor(); }
 $('#brush-shape').onchange = event => selectShape(event.target.value);
 $('#brush-style').onchange = event => selectStyle(event.target.value);
 function selectSize(next) {
-  if (!BRUSH_SIZES.includes(next)) return;
+  if (!validBrushSize(next)) return;
   size = next;
+  toolSizes.set(sizeKey(), size);
   syncToolViews(); updateEraserCursor();
 }
-for (const b of document.querySelectorAll('[data-size]')) b.onclick = () => selectSize(Number(b.dataset.size));
+document.querySelector('.sizes').innerHTML = sizeControl();
+$('#brush-size').oninput = event => selectSize(Number(event.target.value));
 $('#undo').onclick = () => { if (ready && !active && history.undo()) changed(); };
 $('#redo').onclick = () => { if (ready && !active && history.redo()) changed(); };
 $('#clear').onclick = () => { if (!ready || active || !history.document.strokes.length) return; history.commit({ ...history.document, strokes: [] }); changed(); toast('Fresh canvas. Undo brings your drawing back.'); };
@@ -434,7 +443,7 @@ focusView.innerHTML = `<div class="focus-info"><div class="focus-info-top"><p cl
   <div class="focus-canvas"></div>
   <div class="focus-tools" aria-label="drawing tools">
     <label>tools<select data-focus="tool"><option value="brush">draw</option><option value="eraser">erase</option></select></label>
-    <label>brush size<select data-focus="size"><option value="5">fine</option><option value="14">mid</option><option value="32">bold</option></select></label>
+    <label>brush size${sizeControl(true)}</label>
     <label>brush shape<select data-focus="shape"></select></label>
     <label>drawing tools<select data-focus="style"></select></label>
     <label>color<select data-focus="color"></select></label>
@@ -546,10 +555,19 @@ function syncFocusTools() {
   const filling = tool === 'brush' && brushStyle === 'fill';
   focusSelect('size').disabled = focusSelect('shape').disabled = !ready || filling;
   $('#brush-shape').disabled = !ready || filling;
-  for (const button of document.querySelectorAll('[data-size]')) button.disabled = !ready || filling;
+  for (const slider of document.querySelectorAll('[data-brush-size]')) {
+    slider.disabled = !ready || filling;
+    slider.value = String(size);
+    slider.setAttribute('aria-valuetext', `${size} of ${BRUSH_SIZE_MAX}`);
+    const preview = slider.nextElementSibling.querySelector('i');
+    const diameter = size / CANVAS_SIZE * canvas.getBoundingClientRect().width;
+    preview.style.width = preview.style.height = `${diameter}px`;
+    preview.dataset.shape = brushShape;
+    preview.style.backgroundColor = tool === 'eraser' ? '#c52e42' : color;
+  }
 }
 focusSelect('tool').onchange = event => selectTool(event.target.value);
-focusSelect('size').onchange = event => { selectSize(Number(event.target.value)); };
+focusSelect('size').oninput = event => { selectSize(Number(event.target.value)); };
 focusSelect('style').onchange = event => selectStyle(event.target.value);
 focusSelect('shape').onchange = event => selectShape(event.target.value);
 focusSelect('color').onchange = event => selectColor(event.target.value);
@@ -559,8 +577,8 @@ syncToolViews = () => {
     $('#' + id).classList.toggle('selected', id === tool);
     $('#' + id).setAttribute('aria-pressed', String(id === tool));
   }
-  for (const button of document.querySelectorAll('[data-size], [data-ink]')) {
-    const selected = button.hasAttribute('data-size') ? Number(button.dataset.size) === size : button.dataset.ink === color;
+  for (const button of document.querySelectorAll('[data-ink]')) {
+    const selected = button.dataset.ink === color;
     button.classList.toggle('selected', selected); button.setAttribute('aria-pressed', String(selected));
   }
   $('#brush-shape').value = brushShape; $('#brush-style').value = brushStyle;
@@ -610,7 +628,7 @@ function sizeFocusView() {
     - focusView.querySelector('.focus-tools').offsetHeight
     - parseFloat(layout.rowGap) * (sharedHeader ? 2 : 3);
   const stripHeight = touchStrip.getBoundingClientRect().height;
-  const edge = Math.max(0, Math.min(area.clientWidth, availableHeight - stripHeight) - 2);
+  const edge = Math.max(0, Math.min(420, area.clientWidth - 2, availableHeight - stripHeight - 2));
   canvasFrame.style.width = `${edge}px`;
   canvasFrame.style.height = `${edge + stripHeight}px`;
 }

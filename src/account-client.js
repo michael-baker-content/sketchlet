@@ -20,7 +20,11 @@ export async function accountHeaders() {
   if (!token) throw Object.assign(new Error('please visit profile to sign in again or continue as a guest'),{code:'account_session'});
   return {Authorization:`Bearer ${token}`};
 }
-export const accountReturnUrl = () => location.origin + '/profile';
+export const accountReturnUrl = () => {
+  const url=new URL('/profile',location.origin),group=new URLSearchParams(location.search).get('group');
+  if(group&&/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(group))url.searchParams.set('group',group);
+  return url.href;
+};
 function script(src, key) {
   return new Promise((resolve, reject) => {
     const element = document.createElement('script');
@@ -42,7 +46,7 @@ export async function accountRequest(path, clerk, data) {
     body:data ? JSON.stringify(data) : undefined,
   });
   const result = await response.json();
-  if (!response.ok) throw Object.assign(new Error(result.error || 'could not verify your account'),{status:response.status});
+  if (!response.ok) throw Object.assign(new Error(result.error || 'could not verify your account'),{status:response.status,suggestion:typeof result.suggestion==='string'?result.suggestion:null});
   return result;
 }
 

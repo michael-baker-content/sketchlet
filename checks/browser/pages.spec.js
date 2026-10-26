@@ -54,6 +54,7 @@ async function fixture(page, overrides = {}, { emptyDraft = false } = {}) {
       ['/api/drawings/' + id]: drawing,
       '/api/profile': { displayName: 'tester' },
       '/api/profile/avatar': { photo: null },
+      '/api/groups': { groups: [] },
       '/api/profile/drawings': { drawings: [drawing], next: null },
       '/api/queue': [],
       '/api/admin/reports': { items:[],next:null },
@@ -170,6 +171,68 @@ test('account photo is private, requires explicit local import, and loads on ano
     await expect(other.locator('#profile-edit-status')).toHaveText('profile saved');
     expect(photo).toBeNull();
   } finally { await context.close(); }
+});
+
+test('profile groups create with a suggested name, approve members and keep text safe',async({page})=>{
+  await fixture(page);await page.goto('/info');
+  await page.evaluate(async()=>{
+    const {mountProfileGroups}=await import('/src/profile-groups.js');
+    const root=document.createElement('section');root.id='group-fixture';document.querySelector('main').append(root);
+    const group={id:'22222222-2222-4222-8222-222222222222',name:'Dogs-1',description:'A group',listed:false,status:'active',role:'owner',members:[
+      {id:'11111111-1111-4111-8111-111111111111',name:'Owner',status:'active',role:'owner',me:true},
+      {id:'33333333-3333-4333-8333-333333333333',name:'<img src=x>',status:'pending',role:'member',me:false},
+    ]};
+    window.groupWrites=[];let created=false;
+    mountProfileGroups(root,async(path,data)=>{
+      if(path==='/api/groups'&&!data)return {groups:created?[group]:[]};
+      if(path==='/api/groups'&&data){
+        if(data.name==='Dogs')throw Object.assign(new Error('that group name is already taken'),{suggestion:'Dogs-1'});
+        created=true;window.groupWrites.push(data);return {id:group.id};
+      }
+      if(path.endsWith('/approve')){window.groupWrites.push(data);group.members[1].status='active';return {ok:true};}
+      return {group};
+    });
+  });
+  const root=page.locator('#group-fixture');
+  await root.getByLabel('new group name',{exact:true}).fill('Dogs');
+  await root.locator('.groups-create').getByLabel('Listed in group search').uncheck();
+  await root.getByRole('button',{name:'create group',exact:true}).click();
+  await expect(root.locator('.groups-status')).toContainText('already taken');
+  await root.getByRole('button',{name:'use Dogs-1',exact:true}).click();
+  await root.getByRole('button',{name:'create group',exact:true}).click();
+  await expect(root.locator('.group-detail')).toBeVisible();
+  await expect(root.locator('.group-members')).toContainText('<img src=x>');
+  await expect(root.locator('.group-members img')).toHaveCount(0);
+  await root.getByRole('button',{name:'approve',exact:true}).click();
+  await expect(root.getByRole('button',{name:'grant approval rights',exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>window.groupWrites[0].listed)).toBe(false);
+  await expect(root.getByRole('link',{name:'group invitation link'})).toHaveAttribute('href',/\/profile\?group=22222222-/);
+});
+
+test('nonmembers request group approval without seeing member details',async({page})=>{
+  await fixture(page);await page.goto('/info');
+  await page.evaluate(async()=>{
+    const {mountProfileGroups}=await import('/src/profile-groups.js');
+    const root=document.createElement('section');root.id='group-fixture';document.querySelector('main').append(root);
+    const group={id:'22222222-2222-4222-8222-222222222222',name:'Dogs',description:'Friends',status:null,role:null};
+    mountProfileGroups(root,async(path,data)=>{
+      if(path==='/api/groups')return {groups:group.status?[group]:[]};
+      if(path.includes('/search?'))return {groups:[group]};
+      if(path.endsWith('/request')){group.status='pending';return {ok:true};}
+      if(path.endsWith('/leave')){group.status=null;return {ok:true};}
+      return {group};
+    });
+  });
+  const root=page.locator('#group-fixture');
+  await root.getByLabel('group name',{exact:true}).fill('Dogs');
+  await root.getByRole('button',{name:'search groups',exact:true}).click();
+  await root.locator('.groups-results').getByRole('button',{name:'Dogs',exact:true}).click();
+  await expect(root.locator('.group-members')).toHaveCount(0);
+  await root.getByRole('button',{name:'request to join',exact:true}).click();
+  await expect(root.locator('.group-detail')).toContainText('waiting for approval');
+  await expect(root.getByRole('button',{name:'approve',exact:true})).toHaveCount(0);
+  await root.getByRole('button',{name:'cancel request',exact:true}).click();
+  await expect(root.getByRole('button',{name:'request to join',exact:true})).toBeVisible();
 });
 
 test('information pages remain readable and navigable with JavaScript disabled', async ({browser}) => {
@@ -556,7 +619,11 @@ for (const expired of [false,true]) test(`remembered account ${expired ? 'expiry
   `}));
   await page.goto('/');
   if (expired) {
-    await expect(page.getByRole('link',{name:'go to profile',exact:true})).toBeVisible();
+    await expect(page.getByRole('heading',{name:'welcome back',exact:true})).toBeVisible();
+    const signIn = page.getByRole('link',{name:'sign in again',exact:true});
+    await expect(signIn).toBeVisible();
+    await expect(signIn).toHaveAttribute('href','/profile');
+    await expect(page.getByRole('button',{name:'continue as guest',exact:true})).toBeVisible();
     expect(todayRequests).toBe(0);
   } else {
     await expect(page.locator('img.finished-drawing')).toBeVisible();
@@ -1072,15 +1139,30 @@ test('gallery reload never requests the editor or today, even when today is unav
 });
 
 test('completed home displays the submission without fetching editor assets', async ({ page }) => {
-  const { requests, errors } = await fixture(page, { '/api/today': route => route.fulfill({ json: { ...today, submission: drawing } }) });
+  const { requests, errors } = await fixture(page, {
+    '/api/today': route => route.fulfill({ json: { ...today, submission: drawing } }),
+    '/':async route=>{
+      let status,headers,body;
+      await handlePublicPage({method:'GET'},{writeHead(code,values){status=code;headers=values;},end(value){body=value;}},new URL(route.request().url()),{
+        origin:'http://sketchlet.test',announcements:async()=>[{id,title:'Make yourself at home',description:'Keep your drawings together.',body:'Hello',published_at:'2026-10-13T12:00:00Z'}],
+      });
+      await route.fulfill({status,headers,body});
+    },
+  });
   await page.goto('/');
   await expect(page.locator('.finished-drawing')).toBeVisible();
   await expect(page.locator('.completed-home-content .home-highlights')).toBeVisible();
   await expect(page.locator('.completed-home-content .pretend-ad')).toBeVisible();
+  await expect(page.locator('.completed-home-content .home-announcement')).toBeVisible();
+  await expect(page.locator('.completed-home-content').getByRole('link',{name:'Make yourself at home'})).toBeVisible();
+  await expect(page.locator('#page-content .completed-home-content')).toHaveCount(0);
+  await expect(page.locator('.home-announcement')).toHaveCount(1);
   await expect(page.locator('.completed-home-content .finished-drawing')).toHaveCount(0);
   const submission=await page.locator('.submission-layout').boundingBox();
   const extras=await page.locator('.completed-home-content').boundingBox();
   expect(extras.y).toBeGreaterThanOrEqual(submission.y+submission.height);
+  const drawingPanel=await page.locator('#page-content').boundingBox();
+  expect(extras.y-(drawingPanel.y+drawingPanel.height)).toBeGreaterThanOrEqual(28);
   await expect(page.locator('canvas')).toHaveCount(0);
   expectNoEditor(requests);
   expect(errors).toEqual([]);
@@ -1162,21 +1244,27 @@ test('tool choices and background history stay synchronized across desktop and f
   await expect(page.locator('#review-drawing')).toBeEnabled();
   await page.locator('#brush-shape').selectOption('rough');
   await page.locator('#brush-style').selectOption('pencil');
-  await page.locator('[data-size="32"]').click();
+  await page.locator('#brush-size').fill('23');
+  expect((await page.locator('#canvas').boundingBox()).width).toBeLessThanOrEqual(400);
   await page.locator('#eraser').click();
   await expect(page.locator('#brush-style')).toBeDisabled();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('.focus-launch').click();
   await expect(page.locator('[data-focus="tool"]')).toHaveValue('eraser');
   await expect(page.locator('[data-focus="shape"]')).toHaveValue('rough');
-  await expect(page.locator('[data-focus="size"]')).toHaveValue('32');
+  await expect(page.locator('[data-focus="size"]')).toHaveValue('14');
+  await page.locator('[data-focus="size"]').fill('30');
   await expect(page.locator('[data-focus="style"]')).toHaveValue('pencil');
   await expect(page.locator('[data-focus="style"]')).toBeDisabled();
   await page.locator('[data-color-menu="color"]').click();
   await page.locator('.color-menu-option[data-color="#24365B"]').click();
   await expect(page.locator('[data-focus="tool"]')).toHaveValue('brush');
   await expect(page.locator('[data-focus="style"]')).toBeEnabled();
-  await page.locator('[data-focus="size"]').selectOption('5');
+  await expect(page.locator('[data-focus="size"]')).toHaveValue('23');
+  await page.locator('[data-focus="tool"]').selectOption('eraser');
+  await expect(page.locator('[data-focus="size"]')).toHaveValue('30');
+  await page.locator('[data-focus="tool"]').selectOption('brush');
+  await page.locator('[data-focus="size"]').fill('5');
   await page.locator('[data-focus="shape"]').selectOption('square');
   await page.locator('[data-color-menu="background"]').click();
   await page.locator('.color-menu-option[data-color="#FFF3D2"]').click();
@@ -1188,7 +1276,18 @@ test('tool choices and background history stay synchronized across desktop and f
   await page.setViewportSize({ width: 1280, height: 900 });
   await expect(page.locator('#brush')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#brush-shape')).toHaveValue('square');
-  await expect(page.locator('[data-size="5"]')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#brush-size')).toHaveValue('5');
+  await page.locator('#brush-style').selectOption('marker');
+  await expect(page.locator('#brush-size')).toHaveValue('14');
+  await page.locator('#brush-style').selectOption('pencil');
+  await expect(page.locator('#brush-size')).toHaveValue('5');
+  await page.setViewportSize({ width: 820, height: 1180 });
+  expect((await page.locator('#canvas').boundingBox()).width).toBeLessThanOrEqual(400);
+  await page.locator('.focus-launch').click();
+  expect((await page.locator('#canvas').boundingBox()).width).toBeLessThanOrEqual(400);
+  await expect(page.locator('[data-focus="size"]')).toHaveValue('5');
+  await page.locator('.focus-close').click();
+  await page.setViewportSize({ width: 1280, height: 900 });
   await expect(page.locator('#palette').locator('..').locator('summary')).toHaveAttribute('aria-label', 'color: navy');
   await expect(page.locator('#background-palette').locator('..').locator('summary')).toHaveAttribute('aria-label', 'background: cream');
   expect(errors).toEqual([]);
@@ -1300,7 +1399,7 @@ test('320 by 650 touch workspace fits controls and draws upward from the extra s
   expect(await page.locator('.drawing-focus').evaluate(el => el.scrollHeight <= el.clientHeight)).toBe(true);
 });
 
-test('drawing dropdowns preserve their surfaces and accessible color menus across layouts', async ({ page }) => {
+test('drawing controls preserve their surfaces and accessible color menus across layouts', async ({ page }) => {
   await fixture(page);
   await page.setViewportSize({ width:1280, height:900 });
   await page.goto('/');
@@ -1334,9 +1433,32 @@ test('drawing dropdowns preserve their surfaces and accessible color menus acros
   for (const fullscreen of [false, true]) {
     if (fullscreen) await page.locator('.focus-launch').click();
     const container = page.locator(fullscreen ? '.drawing-focus' : '.mobile-sketch-tools');
-    for (const name of ['tool', 'size', 'shape', 'style']) {
+    for (const name of ['tool', 'shape', 'style']) {
       await expectDropdown(container.locator(`[data-focus="${name}"]`), 44);
     }
+    const slider = container.getByRole('slider', { name:'brush size', exact:true });
+    await expect(slider).toBeVisible();
+    await expect(slider).toBeEnabled();
+    await expect(slider).toHaveAttribute('min', '5');
+    await expect(slider).toHaveAttribute('max', '96');
+    await expect(slider).toHaveAttribute('step', '1');
+    const sizeControl = container.locator('.size-control');
+    await expect(sizeControl).toHaveCSS('height', '44px');
+    await expect(sizeControl).toHaveCSS('border-top-style', 'inset');
+    await expect(sizeControl.locator('.size-preview i')).toBeVisible();
+    const sizeBounds = await sizeControl.boundingBox();
+    expect(sizeBounds.x).toBeGreaterThanOrEqual(0);
+    expect(sizeBounds.x + sizeBounds.width).toBeLessThanOrEqual(320);
+    await slider.fill('19');
+    await slider.focus();
+    await slider.press('ArrowRight');
+    await expect(slider).toHaveValue('20');
+    await expect(slider).toHaveAttribute('aria-valuetext', '20 of 96');
+    await slider.press('End');
+    await expect(slider).toHaveValue('96');
+    const previewBounds = await sizeControl.locator('.size-preview i').boundingBox();
+    expect(previewBounds.x).toBeGreaterThanOrEqual(sizeBounds.x);
+    expect(previewBounds.x + previewBounds.width).toBeLessThanOrEqual(sizeBounds.x + sizeBounds.width);
     for (const name of ['color', 'background']) {
       const button = container.locator(`[data-color-menu="${name}"]`);
       await expectDropdown(button, 44);
@@ -1427,6 +1549,22 @@ test('landscape full-screen cutoff preserves the drawing, undo, and normal scrol
   await expect(page.locator('.focus-launch')).toBeVisible();
   await page.locator('.focus-launch').click();
   await expect(page.locator('.drawing-focus')).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test('expired login offers an intentional welcome and explicit guest continuation', async ({ page }) => {
+  const { errors } = await fixture(page, {}, { emptyDraft:true });
+  await page.goto('/info');
+  await page.evaluate(() => localStorage.setItem('sketchlet.account-session','1'));
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name:'welcome back', exact:true })).toBeVisible();
+  await expect(page.getByRole('link', { name:'sign in again', exact:true })).toHaveAttribute('href','/profile');
+  await expect(page.locator('#retry-page')).toHaveCount(0);
+  await expect(page.locator('#canvas')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('sketchlet.account-session'))).toBe('1');
+  await page.getByRole('button', { name:'continue as guest', exact:true }).click();
+  await expect(page.locator('#begin-drawing')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('sketchlet.account-session'))).toBeNull();
   expect(errors).toEqual([]);
 });
 

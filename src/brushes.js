@@ -142,7 +142,12 @@ export function createBrushRenderer(makeCanvas) {
       if (style === 'dashed' && sample.distance % (stroke.size * 4.5) >= stroke.size * 2.5) continue;
       if (style === 'spray') {
         const shapedDots = stroke.sprayVersion >= 2;
-        const radius = shapedDots ? ({ 5: 1.5, 14: 3, 32: 5 }[stroke.size] / 2) : Math.max(.45, stroke.size * .025);
+        // Interpolate the original preset diameters; larger footprints grow
+        // dots gently so spray remains finer than the solid brushes.
+        const diameter = stroke.size <= 14 ? 1.5 + (stroke.size - 5) / 6
+          : stroke.size <= 32 ? 3 + (stroke.size - 14) / 9
+          : 5 * Math.sqrt(stroke.size / 32);
+        const radius = shapedDots ? diameter / 2 : Math.max(.45, stroke.size * .025);
         for (const [x, y] of sprayParticles(sample, stroke.shape, stroke.size, stroke.sprayVersion >= 4 ? 4 : lightSpray ? 3 : 10)) {
           stamp(context, shapedDots ? stroke.shape : 'circle', x, y, radius);
         }

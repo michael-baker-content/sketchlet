@@ -11,3 +11,4 @@ Thumbs.db
 dist/
 .vercel/
 output/playwright/
+/local-notes/

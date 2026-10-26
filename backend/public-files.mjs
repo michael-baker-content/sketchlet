@@ -9,6 +9,7 @@ PUBLIC_FILES.push('src/home-highlights.js');
 PUBLIC_FILES.push('src/admin-announcements.js','src/announcement-format.js');
 PUBLIC_FILES.push('src/page-background.js');
 PUBLIC_FILES.push('src/site-header.js');
+PUBLIC_FILES.push('src/profile-groups.js');
 PUBLIC_FILES.push('src/free-draw-page.js', 'src/editor-loader.js');
 PUBLIC_FILES.push('src/assets/diamond-pattern.svg');
 PUBLIC_FILES.push('src/contact.js');

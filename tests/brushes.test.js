@@ -132,6 +132,22 @@ test('new spray uses small size-dependent dots and the selected particle shape',
   assert.equal(arcs.length, 10, 'older spray strokes retain their original round particles');
 });
 
+test('spray produces finite geometry at every slider size and for larger saved strokes', () => {
+  const marks = [];
+  const record = (...values) => marks.push(values);
+  const context = {save(){},restore(){},beginPath(){},closePath(){},fill(){},
+    moveTo:record,lineTo:record,rect:record,arc:record};
+  const draw = createBrushRenderer(() => {});
+  for (const shape of ['circle','square','rough']) {
+    for (let size = 5; size <= 120; size++) {
+      marks.length = 0;
+      draw(context, {...stroke, size, shape, style:'spray', sprayVersion:5, points:[[50,50]]});
+      assert.ok(marks.length > 0);
+      assert.ok(marks.flat().every(Number.isFinite), `${shape} spray size ${size} must produce valid geometry`);
+    }
+  }
+});
+
 test('lighter spray reduces opacity and particle density while retaining dot size', () => {
   const marks = [], fills = [];
   const context = { save() {}, restore() {}, beginPath() {}, moveTo() {},

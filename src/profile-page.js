@@ -5,6 +5,7 @@ import { mountProfileDetails } from './profile-details.js';
 import { api } from './api-client.js';
 import { mountGuestTransfer } from './guest-transfer.js';
 import { linkingNotice, renderMergeReview } from './merge-review.js';
+import { mountProfileGroups } from './profile-groups.js';
 
 async function start() {
   const panel = document.querySelector('#page-content');
@@ -16,7 +17,8 @@ async function start() {
         <button class="web-button site-button utility" id="account-sign-out" hidden>sign out</button>
       </div>
       <button class="web-button site-button utility" id="account-retry" hidden>retry account connection</button>
-      <div id="account-sign-in"></div>
+      <h2 id="account-sign-in-heading" hidden>Sign in or create an account</h2>
+      <div id="account-sign-in" aria-labelledby="account-sign-in-heading"></div>
       <p id="account-sign-out-note" hidden>Signing out preserves access to unlinked guest drawings on this address. Linked drawings belong to your account.</p>
       <section id="guest-review" aria-labelledby="guest-review-heading" hidden>
         <h2 id="guest-review-heading">drawings from this browser</h2>
@@ -35,6 +37,8 @@ async function start() {
   const details = document.createElement('section');
   details.className = 'information-copy profile-details';
   panel.append(details);
+  const groups=document.createElement('section');groups.className='information-copy profile-groups';groups.hidden=true;panel.append(groups);
+  let disposeGroups=()=>{};
   const recovery = document.createElement('section'); recovery.className = 'information-copy profile-recovery';
   recovery.setAttribute('aria-labelledby','profile-recovery-heading');
   recovery.innerHTML = '<h2 id="profile-recovery-heading">bring drawings from another browser or address</h2><div class="recovery-content"></div>';
@@ -107,9 +111,12 @@ async function start() {
     const wasSignedIn = !!previousSession;
     previousSession = session;
     const current = ++revision;
+    disposeGroups();groups.hidden=true;
     disposeDetails();
     disposeTransfer(); disposeTransfer = mountGuestTransfer(transfer);
     signOut.hidden = !session;
+    document.querySelector('#account-sign-in-heading').hidden = !!session;
+    status.hidden = false;
     document.querySelector('#account-sign-out-note').hidden = !session;
     retry.hidden = true;
     review.hidden = true;
@@ -119,6 +126,7 @@ async function start() {
       rememberAccount(false);
       const detailsReady = loadDetails(api);
       notice(wasSignedIn ? 'you’re signed out. sign in again whenever you’re ready.' : 'sign in or create an account');
+      status.hidden = !wasSignedIn;
       if (!mounted) {
         clerk.mountSignIn(signIn, { routing:'hash', forceRedirectUrl:accountReturnUrl(), signUpForceRedirectUrl:accountReturnUrl() });
         mounted = true;
@@ -132,6 +140,8 @@ async function start() {
       await accountRequest('/api/account/register', clerk, {});
       if (current !== revision) return;
       rememberAccount(true);
+      groups.hidden=false;
+      disposeGroups=mountProfileGroups(groups,(path,data)=>accountRequest(path,clerk,data));
       const detailsReady = loadDetails((path,data) => accountRequest(path,clerk,data),true);
       disposeTransfer();
       disposeTransfer = mountGuestTransfer(transfer,(path,data) => accountRequest(path,clerk,data),() => {

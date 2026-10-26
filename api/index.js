@@ -13,6 +13,10 @@ export default async function handler(req, res) {
       const { handleAdmin } = await import('../backend/admin.mjs');
       await handleAdmin(req, res, `/api/${path}`); return;
     }
+    if (path === 'groups' || path.startsWith('groups/')) {
+      const { handleGroups } = await import('../backend/groups.mjs');
+      await handleGroups(req, res, `/api/${path}`); return;
+    }
     if (path === 'account' || path.startsWith('account/')) {
       const { handleAccount } = await import('../backend/account.mjs');
       await handleAccount(req, res, `/api/${path}`); return;

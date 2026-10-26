@@ -21,6 +21,10 @@ http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, 'http://localhost');
     const pathname = decodeURIComponent(url.pathname);
+    if (pathname === '/api/groups' || pathname.startsWith('/api/groups/')) {
+      const { handleGroups } = await import('./groups.mjs');
+      await handleGroups(req,res,pathname); return;
+    }
     if (pathname === '/api/account' || pathname.startsWith('/api/account/')) {
       await handleAccount(req, res, pathname); return;
     }

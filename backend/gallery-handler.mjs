@@ -84,9 +84,10 @@ return async function handleApi(req, res, pathname) {
         FROM sketchlet_public_drawings d JOIN sketchlet_prompts p ON p.day=d.prompt_day
         LEFT JOIN sketchlet_profiles profile ON profile.owner_hash=d.owner_hash
         CROSS JOIN LATERAL (SELECT avg(stars) AS average,count(*) AS count FROM sketchlet_votes v WHERE v.drawing_id=d.id) stats
-        WHERE d.prompt_day BETWEEN ${day}::date-13 AND ${day}::date
+        WHERE d.prompt_day <= ${day}::date
           AND stats.count>=2 AND stats.average>=4
-        ORDER BY stats.average DESC,stats.count DESC,d.created_at DESC,d.id DESC LIMIT 4`;
+        ORDER BY (d.prompt_day >= ${day}::date-13) DESC,
+          stats.average DESC,stats.count DESC,d.created_at DESC,d.id DESC LIMIT 4`;
       json(res,200,rows.map(row => publicDrawing(row,owner))); return;
     }
     if (pathname === '/api/profile/drawings' && req.method === 'GET') {

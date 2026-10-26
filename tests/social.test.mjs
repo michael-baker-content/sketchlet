@@ -45,7 +45,9 @@ test('published announcements render on Info and latest home preview with safe c
   assert.equal(home.headers['Cache-Control'],'no-store');
   const failed=await response('/',{announcements:async()=>{throw new Error('offline');}});
   assert.equal(failed.status,200);
-  assert.doesNotMatch(failed.body,/class="home-announcement/);
+  assert.match(failed.body,/class="home-announcement/);
+  assert.match(failed.body,/href="\/info#announcements"/);
+  assert.match(failed.body,/latest announcement could not load/);
 });
 
 test('account preview serves a private shell without loading guest or drawing data', async () => {

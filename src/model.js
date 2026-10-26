@@ -1,7 +1,11 @@
 import { BRUSH_SHAPES, BRUSH_STYLES } from './brushes.js';
 import { validFillRuns } from './fill.js';
 export const CANVAS_SIZE = 1200;
-export const BRUSH_SIZES = [5, 14, 32];
+export const BRUSH_SIZE_MIN = 5;
+export const BRUSH_SIZE_MAX = 96;
+export const validBrushSize = size => Number.isInteger(size) && size >= BRUSH_SIZE_MIN && size <= BRUSH_SIZE_MAX;
+// Preserve strokes saved while the slider allowed sizes up to 120.
+const validSavedBrushSize = size => Number.isInteger(size) && size >= BRUSH_SIZE_MIN && size <= 120;
 export const COLORS = [
   { name: 'Midnight', value: '#343044' }, { name: 'Paper', value: '#FFFFFF' },
   { name: 'Lilac', value: '#B39ADB' }, { name: 'Rose', value: '#EAA3B7' },
@@ -49,7 +53,7 @@ export function validDocument(doc) {
     (s.sprayVersion === undefined || [2, 3, 4, 5].includes(s.sprayVersion)) &&
     (s.pencilVersion === undefined || s.pencilVersion === 2) &&
     (s.shape === undefined ? (s.style === undefined || ['solid', 'dashed', 'rough'].includes(s.style)) : BRUSH_SHAPES.includes(s.shape) && (BRUSH_STYLES.includes(s.style) || (s.style === 'line' && s.tool === 'brush' && s.points?.length <= 2))) &&
-    savedColors.has(s.color) && BRUSH_SIZES.includes(s.size) &&
+    savedColors.has(s.color) && validSavedBrushSize(s.size) &&
     Array.isArray(s.points) && s.points.length > 0 && s.points.every(p => Array.isArray(p) && p.length === 2 && p.every(n => Number.isFinite(n) && n >= (s.extended ? -CANVAS_SIZE : 0) && n <= (s.extended ? CANVAS_SIZE * 2 : CANVAS_SIZE))))));
 }
 export class History {

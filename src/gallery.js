@@ -15,7 +15,8 @@ let editorUI = null;
 const panel = $('#page-content');
 const homeAnnouncement = $('.home-announcement');
 function parkAnnouncement() {
-  if (homeAnnouncement && panel.contains(homeAnnouncement)) panel.after(homeAnnouncement);
+  if (homeAnnouncement && (panel.contains(homeAnnouncement) || document.querySelector('.completed-home-content')?.contains(homeAnnouncement))) panel.after(homeAnnouncement);
+  document.querySelector('.completed-home-content')?.remove();
 }
 const escape = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let state = today || { date: easternDate(), prompt: promptForDate(easternDate()), submission: null, streak: 0 };
@@ -363,10 +364,10 @@ async function load() {
     if (generation !== viewGeneration) return;
     if (state.submission) {
       showDrawing(state.submission);
-      const extras = document.createElement('section'); extras.className = 'completed-home-content';
+      const extras = document.createElement('section'); extras.className = 'completed-home-content flow-panel';
       extras.setAttribute('aria-labelledby','completed-home-heading');
       extras.innerHTML = '<div class="panel-title"><h2 id="completed-home-heading">more from sketchlet</h2></div>';
-      panel.append(extras);
+      panel.after(extras);
       mountHomeContent(extras,generation);
       return;
     }

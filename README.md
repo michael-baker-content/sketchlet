@@ -78,7 +78,7 @@ Sketchlet uses **HTML, CSS, and JavaScript**, with the Canvas API doing the draw
 
 The database enforces one drawing per guest per prompt and one editable vote per guest per drawing. Server-side checks block self-voting, and shared request limits help curb abuse. Without accounts, these are browser-based rules—not proof that each visitor is a different person.
 
-Public page metadata is rendered server-side for social crawlers. All shared links advertise the pixel paintbrush logo, never submitted artwork or ratings. Home uses “sketchlet - a little drawing every day”; drawing link titles credit the creator, such as “Michael drew a singing kite on sketchlet,” regardless of who sends the link. Social descriptions stay short, and X cards request the compact summary format. Artwork sharing remains an explicit **share card** action, whose caption omits the site suffix because the card already includes branding. Messaging apps decide the final layout and may retain cached previews.
+Public page metadata is rendered server-side for social crawlers. All shared links advertise a lavender wordmark with a small pixel brush, rendered with the bundled Unkempt Bold font, never submitted artwork or ratings. The favicon remains unchanged. Home uses “sketchlet - a little drawing every day”; drawing link titles credit the creator, such as “Michael drew a singing kite on sketchlet,” regardless of who sends the link. Social descriptions stay short, and X cards request a wide image to fit the wordmark. Artwork sharing remains an explicit **share card** action, whose caption omits the site suffix because the card already includes branding. Messaging apps decide the final layout and may retain cached previews.
 
 The main pieces are:
 

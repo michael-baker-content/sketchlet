@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { drawingIdFromPath, drawingPath } from '../src/drawing-links.js';
 import { formatPromptDate } from '../src/prompts.js';
@@ -18,7 +19,7 @@ export function publicOrigin(env = process.env) {
 }
 
 export function socialTags(meta, origin) {
-  const url = origin + meta.path, image = origin + '/social/paintbrush-v1.png';
+  const url = origin + meta.path, image = origin + '/social/wordmark-v2.png';
   return `<title>${escape(meta.title)}</title>
   <meta name="description" content="${escape(meta.description)}">
   <link rel="canonical" href="${escape(url)}">
@@ -30,23 +31,40 @@ export function socialTags(meta, origin) {
   <meta property="og:image" content="${escape(image)}">
   <meta property="og:image:secure_url" content="${escape(image)}">
   <meta property="og:image:type" content="image/png">
-  <meta property="og:image:width" content="512">
-  <meta property="og:image:height" content="512">
-  <meta property="og:image:alt" content="sketchlet pixel paintbrush logo">
-  <meta name="twitter:card" content="summary">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="sketchlet — a little drawing every day, with a pixel paintbrush">
+  <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="${escape(meta.title)}">
   <meta name="twitter:description" content="a little drawing every day">
   <meta name="twitter:image" content="${escape(image)}">
-  <meta name="twitter:image:alt" content="sketchlet pixel paintbrush logo">`;
+  <meta name="twitter:image:alt" content="sketchlet — a little drawing every day, with a pixel paintbrush">`;
 }
 
 let logo;
 export function socialImage() {
-  // Reuse the actual favicon, with integer pixel scaling and no artwork access.
-  if (!logo) logo = readFile(new URL('../src/assets/favicon.svg', import.meta.url))
-    .then(svg => sharp(svg).resize(512, 512, { kernel: 'nearest' }).png().toBuffer())
+  // Local font rendering is independent of browser fonts and artwork storage.
+  if (!logo) logo = renderBrandPreview()
     .catch(error => { logo = null; throw error; });
   return logo;
+}
+
+async function renderBrandPreview() {
+  const fontfile = fileURLToPath(new URL('../src/assets/fonts/Unkempt-Bold.ttf', import.meta.url));
+  const lettering = async (text, size, width) => sharp({text:{
+    text:`<span foreground="#58345f">${text}</span>`, font:`Unkempt Bold ${size}`, fontfile, rgba:true,
+  }}).resize({width}).png().toBuffer();
+  const [name, tagline, brush] = await Promise.all([
+    lettering('sketchlet', 140, 700), lettering('a little drawing every day', 40, 630),
+    readFile(new URL('../src/assets/social-brush.svg', import.meta.url)).then(svg => sharp(svg).resize(160,160,{kernel:'nearest'}).png().toBuffer()),
+  ]);
+  const nameHeight = (await sharp(name).metadata()).height;
+  const underline = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="720" height="18"><path d="M8 11 Q180 5 352 9 T710 10" fill="none" stroke="#79517d" stroke-width="5" stroke-linecap="round"/></svg>');
+  return sharp({create:{width:1200,height:630,channels:4,background:'#D5D0D9'}}).composite([
+    {input:brush,left:130,top:220}, {input:name,left:310,top:205},
+    {input:underline,left:300,top:220+nameHeight},
+    {input:tagline,left:345,top:260+nameHeight},
+  ]).png().toBuffer();
 }
 
 const defaults = {
@@ -101,7 +119,7 @@ export async function handlePublicPage(req, res, url, dependencies = {}) {
     if (isImage) {
       // Old image URLs now return the same logo, including artwork-preview URLs
       // previously advertised to crawlers. Never retrieve drawings for previews.
-      const known = ['/social/paintbrush-v1.png', '/social/site.png', '/social/gallery.png'].includes(path)
+      const known = ['/social/wordmark-v2.png', '/social/paintbrush-v1.png', '/social/site.png', '/social/gallery.png'].includes(path)
         || (drawingImage && uuid.test(drawingImage)) || (promptImage && dateValid(promptImage));
       if (!known) throw Object.assign(new Error('not found'), { status: 404 });
       const bytes = await socialImage();

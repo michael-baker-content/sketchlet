@@ -114,7 +114,7 @@ test('home and gallery serve social metadata without cookies or database access'
     const result = await response(path, { drawing: () => assert.fail('no drawing query'), prompt: () => assert.fail('no prompt query') });
     assert.equal(result.status, 200);
     assert.match(result.body, /property="og:image" content="https:\/\/sketchlet.example\/social\//);
-    assert.match(result.body, /name="twitter:card" content="summary"/);
+    assert.match(result.body, /name="twitter:card" content="summary_large_image"/);
     assert.match(result.body, /property="og:description" content="a little drawing every day"/);
     if (path === '/') assert.match(result.body, /<title>sketchlet - a little drawing every day<\/title>/);
     assert.match(result.body, path === '/' ? /src\/home-page.js/ : /src\/gallery-page.js/);
@@ -134,7 +134,7 @@ test('old and readable drawing URLs credit the creator and advertise only the lo
     assert.equal(result.status, 200);
     assert.match(result.body, /artist drew a singing kite on sketchlet/);
     assert.ok(result.body.includes(`href="${origin}${drawingPath(id, row.prompt)}"`));
-    assert.ok(result.body.includes(`${origin}/social/paintbrush-v1.png`));
+    assert.ok(result.body.includes(`${origin}/social/wordmark-v2.png`));
     assert.doesNotMatch(result.body, /social\/drawing\//);
     assert.doesNotMatch(result.body, /private-drawing.png|owner_hash/);
   }
@@ -144,7 +144,7 @@ test('prompt galleries get their own title and canonical URL with the shared log
   const result = await response('/gallery?date=2026-10-02&utm_source=test');
   assert.equal(result.status, 200);
   assert.match(result.body, /singing kite - sketchlet gallery/);
-  assert.match(result.body, /social\/paintbrush-v1.png/);
+  assert.match(result.body, /social\/wordmark-v2.png/);
   assert.doesNotMatch(result.body, /utm_source/);
 });
 
@@ -155,15 +155,15 @@ test('untrusted names and prompt text cannot inject HTML metadata', async () => 
   assert.match(result.body, /&lt;script&gt;/);
 });
 
-test('all social PNG URLs return the same square favicon without database or storage access', async () => {
+test('all social PNG URLs return the same branded wordmark without database or storage access', async () => {
   let expected;
-  for (const path of ['/social/paintbrush-v1.png', '/social/site.png', '/social/gallery.png', '/social/prompt/2026-10-02.png', `/social/drawing/${id}.png`]) {
+  for (const path of ['/social/wordmark-v2.png', '/social/paintbrush-v1.png', '/social/site.png', '/social/gallery.png', '/social/prompt/2026-10-02.png', `/social/drawing/${id}.png`]) {
     const result = await response(path, { drawing: () => assert.fail('no drawing query'), prompt: () => assert.fail('no prompt query') });
     assert.equal(result.status, 200, path);
     assert.equal(result.headers['Content-Type'], 'image/png');
     assert.match(result.headers['Cache-Control'], /public/);
     const meta = await sharp(result.body).metadata();
-    assert.equal(meta.width, 512); assert.equal(meta.height, 512);
+    assert.equal(meta.width, 1200); assert.equal(meta.height, 630);
     if (expected) assert.deepEqual(result.body, expected);
     expected = result.body;
   }

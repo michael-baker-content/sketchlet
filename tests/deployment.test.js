@@ -60,7 +60,7 @@ test('deployment publishes only dist and routes drawing URLs to the app',async()
   assert.ok(config.rewrites.some(rule=>rule.source==='/d/:id' && rule.destination==='/api/pages?__page=/d/:id'));
   assert.ok(config.rewrites.some(rule=>rule.source==='/gallery' && rule.destination==='/api/pages?__page=/gallery'));
   assert.ok(config.rewrites.some(rule=>rule.source==='/' && rule.destination==='/api/pages?__page=/'));
-  assert.equal(config.functions['api/pages.js'].includeFiles,'src/assets/favicon.svg');
+  assert.equal(config.functions['api/pages.js'].includeFiles,'src/assets/**');
   assert.equal(publicFile('/gallery'),'gallery.html');
   assert.equal(publicFile('/gallery/'),'gallery.html');
   assert.equal(publicFile('/admin'),'admin.html');
